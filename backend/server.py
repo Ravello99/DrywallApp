@@ -1609,6 +1609,27 @@ async def startup_event():
 # Include router
 app.include_router(api_router)
 
+
+# Serve the built web app (frontend/dist, made by `expo export --platform web`) on the
+# same port as the API, so the office can use the app in a browser. API routes and
+# /docs are registered first, so they always win over this catch-all.
+FRONTEND_DIST = Path(os.environ.get("FRONTEND_DIST", ROOT_DIR.parent / "frontend" / "dist")).resolve()
+if (FRONTEND_DIST / "index.html").is_file():
+    from fastapi.responses import FileResponse
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def serve_web_app(full_path: str):
+        if full_path.startswith("api/") or full_path == "api":
+            raise HTTPException(status_code=404, detail="Not found")
+        if full_path:
+            candidate = (FRONTEND_DIST / full_path).resolve()
+            if FRONTEND_DIST in candidate.parents and candidate.is_file():
+                return FileResponse(candidate)
+        # Single-page app: every other path loads index.html and the router takes over.
+        return FileResponse(FRONTEND_DIST / "index.html")
+
+    logger.info("Serving web app from %s", FRONTEND_DIST)
+
 # CORS: the mobile app sends a bearer token, not cookies, so credentials are off.
 # Set CORS_ORIGINS in backend/.env to a comma-separated list to restrict web origins.
 _cors_origins = [o.strip() for o in os.environ.get("CORS_ORIGINS", "*").split(",") if o.strip()]

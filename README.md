@@ -5,54 +5,68 @@ commercial drywall, steel stud framing, insulation and acoustics company.
 Built on the OakdaleApp1 codebase and being extended role by role:
 estimators/coordinators, project managers, foremen and employees.
 
-## Run it (one command)
+## Run it on the server (Ubuntu 20.04+, one command)
 
-You only need **Python 3.10+** installed ([python.org/downloads](https://www.python.org/downloads/);
-on Windows tick **"Add python.exe to PATH"** in the installer).
+Log in to the server as your normal user (not root), then:
 
 ```bash
-# Windows
-python run.py
-
-# macOS / Linux
+git clone https://github.com/Ravello99/DrywallApp.git
+cd DrywallApp
 python3 run.py
 ```
 
-The first run downloads everything else into this folder (Node.js if you don't have it,
-MongoDB, Python and app packages). That takes 5–10 minutes once; later starts take seconds.
-When it's ready it:
+No sudo and no prompts. Ubuntu 20.04's built-in Python 3.8 is enough to run the
+launcher. The first run downloads what the app needs into this folder (Python 3.12,
+Node.js 22, MongoDB) and takes about 10 minutes. After that it:
 
-- opens the **web version** in your browser,
-- shows a **QR code**: scan it with the **Expo Go** app on your phone (same Wi-Fi),
-- prints the **manager login** (also saved in `LOGIN_DETAILS.txt`).
+- starts the database, backend and app **in the background** (closing your SSH session is fine),
+- **restarts** any part that crashes,
+- **starts again automatically when the server reboots**,
+- prints the addresses, the **manager login** (also saved in `LOGIN_DETAILS.txt`) and a QR code.
 
-Press **Ctrl+C** to stop everything.
-
-| Option | What it does |
+| Command | What it does |
 |---|---|
-| `--no-browser` | Don't open the web version automatically |
-| `--setup-only` | Install and configure, but don't start |
+| `python3 run.py` | Set up / update and (re)start everything |
+| `python3 run.py status` | Show whether it's running, plus the addresses and login |
+| `python3 run.py logs` | Watch the logs live (Ctrl+C to stop watching) |
+| `python3 run.py stop` | Stop everything and turn off start-on-reboot |
+| `python3 run.py --host app.example.com` | Use a domain name (or a specific IP) instead of the detected public IP |
+| `python3 run.py --no-expo` | Run only the web app + API (no phone dev server) |
 
-### Where things live
+After `git pull`, run `python3 run.py` again: it reinstalls only what changed and rebuilds the web app.
 
-| Path | What it is (none of these are committed to git) |
+### How people reach it
+
+| Who | Where |
+|---|---|
+| Office (any browser) | `http://<server>:8000` |
+| Phones (testing) | Install **Expo Go**, scan the QR code or enter `exp://<server>:8081` |
+| API explorer | `http://<server>:8000/docs` |
+
+**Open ports 8000 and 8081** on the server. On a cloud server (AWS, DigitalOcean, Azure…)
+that means the provider's firewall / security group. If `ufw` is active on the server, run
+`sudo ufw allow 8000,8081/tcp`.
+
+### Good to know
+
+- **Web clock-in needs HTTPS.** Browsers only give GPS to secure sites, so clocking in through the
+  web app needs a domain name with HTTPS (planned). Clocking in through the phone app works now.
+- **Expo Go is for testing.** For the crew's phones long-term we'll build a proper installable app.
+  If Expo Go says the project's SDK is unsupported, the app needs an SDK upgrade (next on the list).
+- **RAM:** building the web app needs about 2 GB. On a 1 GB server, add swap first.
+- **MongoDB** listens only on the server itself (127.0.0.1), never on the internet. Data lives in
+  `.data/db`. On CPUs without AVX the launcher automatically uses MongoDB 4.4.
+- If MongoDB complains about a missing library, the error tells you the one `apt-get` command to run.
+
+### Where things live (none of these are committed to git)
+
+| Path | What it is |
 |---|---|
 | `backend/.env` | Database address, random secret key, first admin login |
-| `frontend/.env` | Backend address for the app (rewritten on each start) |
-| `.data/db` | Your local database |
-| `.logs/` | `backend.log` and `mongod.log` if something goes wrong |
-| `.tools/` | Downloaded Node.js / MongoDB |
-
-To use a hosted database (e.g. MongoDB Atlas) instead, change `MONGO_URL` in `backend/.env`.
-
-### Troubleshooting
-
-- **Windows asks to allow Python/Node through the firewall:** click *Allow* (private networks),
-  otherwise your phone can't reach the app.
-- **"python is not recognized" / opens the Microsoft Store:** reinstall Python from python.org with
-  "Add to PATH" ticked.
-- **Phone can't connect:** make sure phone and computer are on the same Wi-Fi (not a guest network).
-- **Port 8000 already in use:** close the other run.py window and try again.
+| `frontend/.env` | Server address the app uses |
+| `.data/` | Database files and launcher state |
+| `.logs/` | `launcher.log`, `backend.log`, `mongod.log`, `expo.log` |
+| `.tools/` | Downloaded Python, Node.js and MongoDB |
 
 ## Project layout
 
@@ -65,7 +79,7 @@ run.py     one-command launcher
 ## Roadmap
 
 - **Phase 0 – foundation:** ✅ clean repo, ✅ no default login or hardcoded secret, ✅ CORS config,
-  ✅ launcher; next: role/permission model with project scoping, split API into modules,
+  ✅ server launcher; next: role/permission model with project scoping, split API into modules,
   Site → Project, file storage outside the database.
 - **Phase 1 – field operations:** employee profiles (pay, specialty, certs), server-side GPS radius
   and job shutdown, scope workflows and hour budgets with over-budget flags, safety expiry alerts
