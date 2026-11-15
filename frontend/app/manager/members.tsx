@@ -48,7 +48,7 @@ const getRoleColor = (role: string): string => {
     case 'journeyman':
       return '#9C27B0';
     case 'apprentice':
-      return '#FF9800';
+      return '#D98E04';
     default:
       return COLORS.gray500;
   }

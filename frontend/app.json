@@ -1,16 +1,16 @@
 {
   "expo": {
-    "name": "Oakdale Construction Management",
-    "slug": "Oakdale-Construction-Management",
+    "name": "VanGuard",
+    "slug": "vanguard-drywall",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "constructionmanager",
+    "scheme": "vanguard",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.constructionmanager.app",
+      "bundleIdentifier": "com.vanguarddrywall.app",
       "infoPlist": {
         "NSCameraUsageDescription": "This app needs access to your camera to take photos of safety documentation.",
         "NSPhotoLibraryUsageDescription": "This app needs access to your photo library to upload safety documentation.",
@@ -18,10 +18,10 @@
       }
     },
     "android": {
-      "package": "com.constructionmanager.app",
+      "package": "com.vanguarddrywall.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#FF6B35"
+        "backgroundColor": "#FFFFFF"
       },
       "edgeToEdgeEnabled": true,
       "permissions": [
@@ -42,28 +42,28 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Allow Construction Manager to use your location for clock in/out."
+          "locationAlwaysAndWhenInUsePermission": "Allow VanGuard to use your location to confirm you are on the job site when clocking in."
         }
       ],
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow Construction Manager to access your camera for safety documentation."
+          "cameraPermission": "Allow VanGuard to use your camera for safety documents and site photos."
         }
       ],
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow Construction Manager to access your photos for safety documentation."
+          "photosPermission": "Allow VanGuard to access your photos for safety documents and site photos."
         }
       ],
       [
         "expo-splash-screen",
         {
           "image": "./assets/images/splash-image.png",
-          "imageWidth": 200,
+          "imageWidth": 160,
           "resizeMode": "contain",
-          "backgroundColor": "#FF6B35"
+          "backgroundColor": "#FFFFFF"
         }
       ],
       "@react-native-community/datetimepicker",

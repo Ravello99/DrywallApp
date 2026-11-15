@@ -154,23 +154,23 @@ export default function TimesheetsScreen() {
         <title>Timesheet Report - ${siteName}</title>
         <style>
           body { font-family: Arial, sans-serif; margin: 40px; color: #333; }
-          .header { text-align: center; margin-bottom: 30px; border-bottom: 3px solid #C8102E; padding-bottom: 20px; }
-          .header h1 { color: #C8102E; margin: 0; font-size: 28px; }
+          .header { text-align: center; margin-bottom: 30px; border-bottom: 3px solid #0B2556; padding-bottom: 20px; }
+          .header h1 { color: #0B2556; margin: 0; font-size: 28px; }
           .header h2 { color: #666; margin: 10px 0 0 0; font-size: 18px; font-weight: normal; }
           .header p { color: #888; margin: 5px 0; }
           .summary { background: #f5f5f5; padding: 20px; border-radius: 8px; margin-bottom: 30px; }
           .summary-grid { display: flex; justify-content: space-around; text-align: center; }
-          .summary-item h3 { margin: 0; color: #C8102E; font-size: 32px; }
+          .summary-item h3 { margin: 0; color: #0B2556; font-size: 32px; }
           .summary-item p { margin: 5px 0 0 0; color: #666; }
           table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
-          th { background: #C8102E; color: white; padding: 12px; text-align: left; }
+          th { background: #0B2556; color: white; padding: 12px; text-align: left; }
           td { padding: 10px 12px; border-bottom: 1px solid #ddd; }
           tr:nth-child(even) { background: #f9f9f9; }
           .worker-section { margin-bottom: 30px; page-break-inside: avoid; }
-          .worker-header { background: #E3F2FD; padding: 12px; border-radius: 8px 8px 0 0; }
-          .worker-header h3 { margin: 0; color: #1976D2; }
+          .worker-header { background: #E7ECF5; padding: 12px; border-radius: 8px 8px 0 0; }
+          .worker-header h3 { margin: 0; color: #0B2556; }
           .worker-header span { color: #666; font-size: 14px; }
-          .total-row { background: #FFF3E0 !important; font-weight: bold; }
+          .total-row { background: #F6F0DC !important; font-weight: bold; }
           .footer { text-align: center; margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; color: #888; font-size: 12px; }
           @media print { 
             body { margin: 20px; }
@@ -180,7 +180,7 @@ export default function TimesheetsScreen() {
       </head>
       <body>
         <div class="header">
-          <h1>Oakdale Drywall & Acoustics LTD</h1>
+          <h1>VanGuard Drywall & Acoustics</h1>
           <h2>Timesheet Report</h2>
           <p><strong>Site:</strong> ${siteName}</p>
           <p><strong>Period:</strong> ${dateRange}</p>
@@ -252,7 +252,7 @@ export default function TimesheetsScreen() {
 
     html += `
         <div class="footer">
-          <p>Oakdale Drywall & Acoustics LTD • Developed by Nicholas Ravello</p>
+          <p>VanGuard Drywall & Acoustics • Developed by Nicholas Ravello</p>
         </div>
         <script>window.print();</script>
       </body>

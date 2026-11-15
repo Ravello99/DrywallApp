@@ -42,7 +42,7 @@ export default function AnnouncementsScreen() {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#FF6B35" />
+        <ActivityIndicator size="large" color="#0B2556" />
       </View>
     );
   }
@@ -57,7 +57,7 @@ export default function AnnouncementsScreen() {
           announcements.map((announcement) => (
             <View key={announcement.id} style={styles.announcementCard}>
               <View style={styles.header}>
-                <MaterialIcons name="campaign" size={24} color="#FF6B35" />
+                <MaterialIcons name="campaign" size={24} color="#0B2556" />
                 <View style={styles.headerInfo}>
                   <Text style={styles.siteName}>{announcement.site_name}</Text>
                   <Text style={styles.date}>
@@ -107,7 +107,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 16,
     borderLeftWidth: 4,
-    borderLeftColor: '#FF6B35',
+    borderLeftColor: '#0B2556',
   },
   header: {
     flexDirection: 'row',
@@ -120,7 +120,7 @@ const styles = StyleSheet.create({
   siteName: {
     fontSize: 14,
     fontWeight: 'bold',
-    color: '#FF6B35',
+    color: '#0B2556',
   },
   date: {
     fontSize: 12,

@@ -109,13 +109,13 @@ export default function ManagerDashboard() {
 
         {/* Stats Grid */}
         <View style={styles.statsGrid}>
-          <View style={[styles.statCard, { backgroundColor: '#E3F2FD' }]}>
+          <View style={[styles.statCard, { backgroundColor: '#E7ECF5' }]}>
             <MaterialIcons name="people" size={32} color={COLORS.info} />
             <Text style={styles.statValue}>{stats.total_workers || 0}</Text>
             <Text style={styles.statLabel}>Team Members</Text>
           </View>
 
-          <View style={[styles.statCard, { backgroundColor: '#FCE4EC' }]}>
+          <View style={[styles.statCard, { backgroundColor: '#F6F0DC' }]}>
             <MaterialIcons name="supervised-user-circle" size={32} color={COLORS.primary} />
             <Text style={styles.statValue}>{stats.total_managers || 0}</Text>
             <Text style={styles.statLabel}>Managers</Text>
@@ -127,8 +127,8 @@ export default function ManagerDashboard() {
             <Text style={styles.statLabel}>Active Sites</Text>
           </View>
 
-          <View style={[styles.statCard, { backgroundColor: '#FFF3E0' }]}>
-            <MaterialIcons name="access-time" size={32} color="#FF9800" />
+          <View style={[styles.statCard, { backgroundColor: '#F6F0DC' }]}>
+            <MaterialIcons name="access-time" size={32} color="#D98E04" />
             <Text style={styles.statValue}>{stats.clocked_in_workers || 0}</Text>
             <Text style={styles.statLabel}>Clocked In</Text>
           </View>
@@ -318,7 +318,7 @@ const styles = StyleSheet.create({
   },
   warningAlert: {
     backgroundColor: '#FFF8E1',
-    borderLeftColor: '#FF9800',
+    borderLeftColor: '#D98E04',
   },
   alertHeader: {
     flexDirection: 'row',

@@ -75,7 +75,7 @@ export default function SafetyReviewScreen() {
     if (daysUntil <= 30) {
       return { status: 'critical', color: COLORS.error, label: `${daysUntil} days - CRITICAL` };
     } else if (daysUntil <= 60) {
-      return { status: 'warning', color: '#FF9800', label: `${daysUntil} days - WARNING` };
+      return { status: 'warning', color: '#D98E04', label: `${daysUntil} days - WARNING` };
     } else {
       return { status: 'safe', color: COLORS.success, label: `${daysUntil} days` };
     }
@@ -162,7 +162,7 @@ export default function SafetyReviewScreen() {
             style={[styles.filterTab, styles.filterTabWarning, expiryFilter === 'warning' && styles.filterTabWarningActive]}
             onPress={() => setExpiryFilter('warning')}
           >
-            <MaterialIcons name="warning" size={16} color={expiryFilter === 'warning' ? COLORS.white : '#FF9800'} />
+            <MaterialIcons name="warning" size={16} color={expiryFilter === 'warning' ? COLORS.white : '#D98E04'} />
             <Text style={[styles.filterTabText, styles.filterTabTextWarning, expiryFilter === 'warning' && styles.filterTabTextActive]}>
               30-60 Days ({counts.warning})
             </Text>
@@ -192,7 +192,7 @@ export default function SafetyReviewScreen() {
           )}
           {counts.warning > 0 && (
             <View style={[styles.alertItem, styles.alertWarning]}>
-              <MaterialIcons name="warning" size={20} color="#FF9800" />
+              <MaterialIcons name="warning" size={20} color="#D98E04" />
               <Text style={styles.alertText}>
                 <Text style={styles.alertBold}>{counts.warning}</Text> document(s) expiring within 30-60 days
               </Text>
@@ -440,10 +440,10 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.error,
   },
   filterTabWarning: {
-    backgroundColor: '#FF980015',
+    backgroundColor: '#D98E0415',
   },
   filterTabWarningActive: {
-    backgroundColor: '#FF9800',
+    backgroundColor: '#D98E04',
   },
   filterTabSafe: {
     backgroundColor: COLORS.success + '15',
@@ -460,7 +460,7 @@ const styles = StyleSheet.create({
     color: COLORS.error,
   },
   filterTabTextWarning: {
-    color: '#FF9800',
+    color: '#D98E04',
   },
   filterTabTextSafe: {
     color: COLORS.success,

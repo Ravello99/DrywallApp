@@ -42,7 +42,7 @@ client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
 # Create the main app
-app = FastAPI(title="Oakdale Construction Management API")
+app = FastAPI(title="VanGuard Drywall & Acoustics API")
 api_router = APIRouter(prefix="/api")
 
 # Configure logging
@@ -1196,9 +1196,9 @@ async def generate_timesheet_report(
     headers = ["Worker Name", "Site Name", "Clock In", "Clock Out", "Total Hours", "Clock In Location", "Clock Out Location"]
     ws.append(headers)
     
-    # Style headers - Oakdale Red
+    # Style headers - VanGuard navy
     header_font = Font(bold=True, color="FFFFFF")
-    header_fill = PatternFill(start_color="C8102E", end_color="C8102E", fill_type="solid")
+    header_fill = PatternFill(start_color="0B2556", end_color="0B2556", fill_type="solid")
     for cell in ws[1]:
         cell.font = header_font
         cell.fill = header_fill
@@ -1239,7 +1239,7 @@ async def generate_timesheet_report(
     wb.save(excel_file)
     excel_file.seek(0)
     
-    filename = f"oakdale_timesheet_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    filename = f"vanguard_timesheet_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
     
     return StreamingResponse(
         excel_file,

@@ -1,11 +1,11 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { COLORS } from '../constants/colors';
+import { COLORS, COMPANY } from '../constants/colors';
 
 export default function Footer() {
   return (
     <View style={styles.container}>
-      <Text style={styles.mainText}>Oakdale Drywall & Acoustics LTD</Text>
+      <Text style={styles.mainText}>{COMPANY.name}</Text>
       <Text style={styles.subText}>Developed by Nicholas Ravello</Text>
     </View>
   );

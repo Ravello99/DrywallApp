@@ -20,7 +20,7 @@ import Footer from '../../src/components/Footer';
 
 const PRIORITIES = [
   { value: 'high', label: 'High', color: COLORS.error },
-  { value: 'medium', label: 'Medium', color: '#FF9800' },
+  { value: 'medium', label: 'Medium', color: '#D98E04' },
   { value: 'low', label: 'Low', color: COLORS.success },
 ];
 
@@ -71,7 +71,7 @@ export default function WorkerTasksScreen() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'complete': return COLORS.success;
-      case 'in_progress': return '#FF9800';
+      case 'in_progress': return '#D98E04';
       default: return COLORS.gray400;
     }
   };
@@ -180,7 +180,7 @@ export default function WorkerTasksScreen() {
                   <View style={styles.statusActions}>
                     {task.status === 'todo' && (
                       <TouchableOpacity
-                        style={[styles.statusButton, { backgroundColor: '#FF9800' }]}
+                        style={[styles.statusButton, { backgroundColor: '#D98E04' }]}
                         onPress={() => handleStatusChange(task, 'in_progress')}
                       >
                         <MaterialIcons name="play-arrow" size={18} color={COLORS.white} />

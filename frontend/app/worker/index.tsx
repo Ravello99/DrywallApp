@@ -206,7 +206,7 @@ export default function WorkerDashboard() {
             style={styles.actionCard}
             onPress={() => router.push('/worker/tasks')}
           >
-            <View style={[styles.actionIconContainer, { backgroundColor: '#E3F2FD' }]}>
+            <View style={[styles.actionIconContainer, { backgroundColor: '#E7ECF5' }]}>
               <MaterialIcons name="assignment" size={28} color={COLORS.info} />
             </View>
             <Text style={styles.actionTitle}>Tasks</Text>
@@ -221,7 +221,7 @@ export default function WorkerDashboard() {
             style={styles.actionCard}
             onPress={() => router.push('/worker/forms')}
           >
-            <View style={[styles.actionIconContainer, { backgroundColor: '#FCE4EC' }]}>
+            <View style={[styles.actionIconContainer, { backgroundColor: '#F6F0DC' }]}>
               <MaterialIcons name="description" size={28} color={COLORS.primary} />
             </View>
             <Text style={styles.actionTitle}>Forms</Text>
@@ -497,7 +497,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 6,
     borderTopWidth: 1,
-    borderTopColor: '#FFE082',
+    borderTopColor: '#E3D3A0',
   },
   expiringDocName: {
     fontSize: 13,
@@ -621,7 +621,7 @@ const styles = StyleSheet.create({
     color: COLORS.success,
   },
   statusComplete: {
-    backgroundColor: '#E3F2FD',
+    backgroundColor: '#E7ECF5',
     color: COLORS.info,
   },
   recordDate: {

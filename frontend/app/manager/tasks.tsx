@@ -26,7 +26,7 @@ import Footer from '../../src/components/Footer';
 
 const PRIORITIES = [
   { value: 'high', label: 'High', color: COLORS.error },
-  { value: 'medium', label: 'Medium', color: '#FF9800' },
+  { value: 'medium', label: 'Medium', color: '#D98E04' },
   { value: 'low', label: 'Low', color: COLORS.success },
 ];
 
@@ -157,7 +157,7 @@ export default function TasksScreen() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'complete': return COLORS.success;
-      case 'in_progress': return '#FF9800';
+      case 'in_progress': return '#D98E04';
       default: return COLORS.gray400;
     }
   };

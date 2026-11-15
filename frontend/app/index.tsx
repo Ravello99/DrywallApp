@@ -94,11 +94,12 @@ export default function LoginScreen() {
           {/* Logo/Header - No circular container, just the logo */}
           <View style={styles.header}>
             <Image 
-              source={require('../assets/images/oakdale-logo.jpg')}
+              source={require('../assets/images/vanguard-logo.png')}
               style={styles.logo}
               resizeMode="contain"
             />
-            <Text style={styles.title}>Construction Management</Text>
+            <View style={styles.goldRule} />
+            <Text style={styles.title}>Project & Field Management</Text>
           </View>
 
           {/* Login Form */}
@@ -173,15 +174,22 @@ const styles = StyleSheet.create({
     marginBottom: 40,
   },
   logo: {
-    width: 200,
-    height: 120,
+    width: 300,
+    height: 72,
     marginBottom: 16,
+  },
+  goldRule: {
+    width: 48,
+    height: 3,
+    backgroundColor: COLORS.accent,
+    borderRadius: 2,
   },
   title: {
     fontSize: 18,
     fontWeight: '600',
-    color: COLORS.textSecondary,
-    marginTop: 8,
+    color: COLORS.primary,
+    marginTop: 12,
+    letterSpacing: 0.5,
   },
   form: {
     marginBottom: 24,
