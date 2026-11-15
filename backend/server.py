@@ -76,26 +76,53 @@ class LocationModel(BaseModel):
     longitude: float
 
 
-class UserRole(str):
-    APPRENTICE = "apprentice"
-    JOURNEYMAN = "journeyman"
-    LEAD_HAND = "lead_hand"
-    FOREMAN = "foreman"
-    MANAGER = "manager"
+# ---------- Roles ----------
+# Office roles use the management screens; field roles use the crew screens.
+ROLE_ADMIN = "admin"                     # owner / office admin: everything
+ROLE_COORDINATOR = "project_coordinator"  # bids, invoicing, job shutdown
+ROLE_ESTIMATOR = "estimator"             # bids and estimating
+ROLE_PM = "project_manager"              # projects, crews, materials, approvals
+ROLE_FOREMAN = "foreman"                 # runs a job site
+ROLE_EMPLOYEE = "employee"               # crew member
+
+ALL_ROLES = [ROLE_ADMIN, ROLE_COORDINATOR, ROLE_ESTIMATOR, ROLE_PM, ROLE_FOREMAN, ROLE_EMPLOYEE]
+OFFICE_ROLES = {ROLE_ADMIN, ROLE_COORDINATOR, ROLE_ESTIMATOR, ROLE_PM}
+FIELD_ROLES = {ROLE_FOREMAN, ROLE_EMPLOYEE}
+PAY_RATE_VIEWERS = {ROLE_ADMIN, ROLE_PM, ROLE_COORDINATOR}   # who may see/edit pay rates
+SHUTDOWN_ROLES = {ROLE_ADMIN, ROLE_COORDINATOR, ROLE_PM}     # who may shut a job site down
+
+# Roles from the Oakdale app, mapped on startup. Old crew levels become the "level" field.
+LEGACY_ROLES = {"manager": (ROLE_ADMIN, None), "apprentice": (ROLE_EMPLOYEE, "apprentice"),
+                "journeyman": (ROLE_EMPLOYEE, "journeyman"), "lead_hand": (ROLE_EMPLOYEE, "lead_hand")}
+
+SPECIALTIES = ["steel_framer", "drywaller", "taper_finisher", "insulator", "acoustic_ceilings",
+               "labourer", "general"]
+LEVELS = ["apprentice", "journeyman", "lead_hand"]
 
 
 class UserBase(BaseModel):
     email: EmailStr
     name: str
-    role: str = Field(default="apprentice")
+    role: str = Field(default=ROLE_EMPLOYEE)
 
 
-class UserCreate(UserBase):
+class UserProfileFields(BaseModel):
+    phone: Optional[str] = None
+    emergency_contact_name: Optional[str] = None
+    emergency_contact_phone: Optional[str] = None
+    specialties: Optional[List[str]] = None
+    level: Optional[str] = None
+    hire_date: Optional[str] = None
+    pay_rate: Optional[float] = None          # hourly, dollars
+    active: Optional[bool] = None
+
+
+class UserCreate(UserBase, UserProfileFields):
     password: str
     assigned_sites: List[str] = Field(default_factory=list)
 
 
-class UserUpdate(BaseModel):
+class UserUpdate(UserProfileFields):
     name: Optional[str] = None
     email: Optional[EmailStr] = None
     assigned_sites: Optional[List[str]] = None
@@ -103,13 +130,57 @@ class UserUpdate(BaseModel):
     role: Optional[str] = None
 
 
-class UserResponse(UserBase):
+class UserResponse(UserBase, UserProfileFields):
     id: str
     assigned_sites: List[str] = Field(default_factory=list)
     created_at: datetime
 
     class Config:
         populate_by_name = True
+
+
+def user_out(u: dict, viewer: Optional[dict] = None) -> UserResponse:
+    """Build the API view of a user. Pay rate is only included for roles allowed to see it
+    (and for the person themselves)."""
+    can_see_pay = viewer is not None and (
+        viewer.get("role") in PAY_RATE_VIEWERS or str(viewer.get("_id")) == str(u.get("_id")))
+    return UserResponse(
+        id=str(u["_id"]),
+        email=u["email"],
+        name=u["name"],
+        role=u.get("role", ROLE_EMPLOYEE),
+        assigned_sites=u.get("assigned_sites", []),
+        created_at=u["created_at"],
+        phone=u.get("phone"),
+        emergency_contact_name=u.get("emergency_contact_name"),
+        emergency_contact_phone=u.get("emergency_contact_phone"),
+        specialties=u.get("specialties") or [],
+        level=u.get("level"),
+        hire_date=u.get("hire_date"),
+        pay_rate=u.get("pay_rate") if can_see_pay else None,
+        active=u.get("active", True),
+    )
+
+
+def validate_user_fields(data: dict, viewer: dict) -> dict:
+    if "role" in data and data["role"] not in ALL_ROLES:
+        raise HTTPException(status_code=400, detail="Unknown role: %s" % data["role"])
+    if data.get("role") == ROLE_ADMIN and viewer.get("role") != ROLE_ADMIN:
+        raise HTTPException(status_code=403, detail="Only an admin can create or promote admins")
+    if "specialties" in data and data["specialties"] is not None:
+        bad = [x for x in data["specialties"] if x not in SPECIALTIES]
+        if bad:
+            raise HTTPException(status_code=400, detail="Unknown specialty: %s" % ", ".join(bad))
+    if data.get("level") and data["level"] not in LEVELS:
+        raise HTTPException(status_code=400, detail="Unknown level: %s" % data["level"])
+    if "pay_rate" in data and data["pay_rate"] is not None:
+        if viewer.get("role") not in PAY_RATE_VIEWERS:
+            raise HTTPException(status_code=403, detail="You can't set pay rates")
+        if data["pay_rate"] < 0:
+            raise HTTPException(status_code=400, detail="Pay rate can't be negative")
+    if "email" in data and data["email"]:
+        data["email"] = str(data["email"]).lower()
+    return data
 
 
 class LoginRequest(BaseModel):
@@ -123,25 +194,62 @@ class Token(BaseModel):
     user: UserResponse
 
 
+SITE_STATUSES = ["active", "shutdown", "completed"]
+JOB_TYPES = ["multi_family", "commercial_fit_out", "institutional", "other"]
+DEFAULT_GEOFENCE_M = 200
+
+
 class SiteCreate(BaseModel):
     name: str
     address: str
     location: Optional[LocationModel] = None
+    geofence_radius_m: int = Field(default=DEFAULT_GEOFENCE_M, ge=25, le=5000)
     status: str = Field(default="active")
+    project_number: Optional[str] = None
+    general_contractor: Optional[str] = None
+    job_type: Optional[str] = None
+    contract_value: Optional[float] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+
+
+class SiteUpdate(BaseModel):
+    name: Optional[str] = None
+    address: Optional[str] = None
+    location: Optional[LocationModel] = None
+    geofence_radius_m: Optional[int] = Field(default=None, ge=25, le=5000)
+    status: Optional[str] = None
+    project_number: Optional[str] = None
+    general_contractor: Optional[str] = None
+    job_type: Optional[str] = None
+    contract_value: Optional[float] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
 
 
 class SiteResponse(SiteCreate):
     id: str
     created_at: datetime
+    shutdown_reason: Optional[str] = None
+    shutdown_at: Optional[datetime] = None
+    shutdown_by_name: Optional[str] = None
+    workers_on_site: int = 0
+
+
+class ShutdownRequest(BaseModel):
+    reason: str = Field(min_length=3, max_length=500)
+    clock_out_everyone: bool = True
 
 
 class ClockInRequest(BaseModel):
     site_id: str
     location: LocationModel
+    accuracy_m: Optional[float] = None   # GPS accuracy reported by the phone
 
 
 class ClockOutRequest(BaseModel):
     location: LocationModel
+    accuracy_m: Optional[float] = None
 
 
 class ClockRecordResponse(BaseModel):
@@ -157,6 +265,11 @@ class ClockRecordResponse(BaseModel):
     total_hours: Optional[float] = None
     status: str
     synced: bool = Field(default=True)
+    clock_in_distance_m: Optional[float] = None
+    clock_out_distance_m: Optional[float] = None
+    flagged: bool = False
+    flag_reason: Optional[str] = None
+    auto_clock_out_reason: Optional[str] = None
 
 
 class SafetyDocumentCreate(BaseModel):
@@ -410,10 +523,58 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     return user
 
 
-async def get_current_manager(current_user: dict = Depends(get_current_user)):
-    if current_user.get("role") != "manager":
-        raise HTTPException(status_code=403, detail="Not authorized. Manager access required.")
+def is_office(user: dict) -> bool:
+    return user.get("role") in OFFICE_ROLES
+
+
+async def get_current_office_user(current_user: dict = Depends(get_current_user)):
+    if not is_office(current_user):
+        raise HTTPException(status_code=403, detail="Not authorized. Office access required.")
     return current_user
+
+
+# Older endpoints use this name; "manager" now means any office role.
+get_current_manager = get_current_office_user
+
+
+def require_roles(*roles: str):
+    allowed = set(roles)
+
+    async def checker(current_user: dict = Depends(get_current_user)):
+        if current_user.get("role") not in allowed:
+            raise HTTPException(status_code=403, detail="You don't have permission to do that.")
+        return current_user
+    return checker
+
+
+def can_access_site(user: dict, site_id: str) -> bool:
+    return is_office(user) or site_id in (user.get("assigned_sites") or [])
+
+
+def distance_m(a: dict, b: dict) -> float:
+    """Great-circle distance in metres between two {latitude, longitude} points."""
+    from math import radians, sin, cos, asin, sqrt
+    lat1, lon1, lat2, lon2 = map(radians, [a["latitude"], a["longitude"], b["latitude"], b["longitude"]])
+    h = sin((lat2 - lat1) / 2) ** 2 + cos(lat1) * cos(lat2) * sin((lon2 - lon1) / 2) ** 2
+    return 2 * 6371000 * asin(sqrt(h))
+
+
+def geofence_check(site: dict, location: dict, accuracy_m: Optional[float]):
+    """Returns (ok, distance_m, message). A site with no GPS location set can't be checked,
+    so clock-in is allowed but the record is flagged for the office."""
+    if not site.get("location"):
+        return True, None, "Site has no GPS location set"
+    d = distance_m(site["location"], location)
+    radius = site.get("geofence_radius_m") or DEFAULT_GEOFENCE_M
+    slack = min(max(accuracy_m or 0, 0), 50)   # forgive up to 50 m of GPS inaccuracy
+    if d > radius + slack:
+        return False, round(d), ("You're about %s from %s. You need to be within %d m of the site to clock in."
+                                 % (format_distance(d), site["name"], radius))
+    return True, round(d), None
+
+
+def format_distance(d: float) -> str:
+    return "%d m" % round(d) if d < 1000 else "%.1f km" % (d / 1000)
 
 
 def calculate_expiry_info(expiry_date_str: Optional[str]) -> tuple:
@@ -426,8 +587,9 @@ def calculate_expiry_info(expiry_date_str: Optional[str]) -> tuple:
         today = datetime.now(expiry_date.tzinfo) if expiry_date.tzinfo else datetime.now()
         days_until_expiry = (expiry_date - today).days
         
-        is_expiring_critical = days_until_expiry <= 30 and days_until_expiry >= 0
-        is_expiring_soon = days_until_expiry <= 60 and days_until_expiry > 30
+        # 14 days: employee gets a two-week notice. 7 days (or expired): foreman is warned.
+        is_expiring_critical = days_until_expiry <= 7
+        is_expiring_soon = 7 < days_until_expiry <= 14
         
         return is_expiring_soon, is_expiring_critical, days_until_expiry
     except:
@@ -468,182 +630,224 @@ async def health_check():
 
 @api_router.post("/auth/login", response_model=Token)
 async def login(login_data: LoginRequest):
-    user = await db.users.find_one({"email": login_data.email})
+    user = await db.users.find_one({"email": login_data.email.lower()})
     if not user or not verify_password(login_data.password, user["password"]):
         raise HTTPException(status_code=401, detail="Incorrect email or password")
-    
+    if user.get("active") is False:
+        raise HTTPException(status_code=403, detail="This account has been deactivated")
     access_token = create_access_token(data={"sub": str(user["_id"])})
-    
-    user_response = UserResponse(
-        id=str(user["_id"]),
-        email=user["email"],
-        name=user["name"],
-        role=user["role"],
-        assigned_sites=user.get("assigned_sites", []),
-        created_at=user["created_at"]
-    )
-    
-    return Token(
-        access_token=access_token,
-        token_type="bearer",
-        user=user_response
-    )
+    return Token(access_token=access_token, token_type="bearer", user=user_out(user, user))
 
 
 @api_router.get("/auth/me", response_model=UserResponse)
 async def get_me(current_user: dict = Depends(get_current_user)):
-    return UserResponse(
-        id=str(current_user["_id"]),
-        email=current_user["email"],
-        name=current_user["name"],
-        role=current_user["role"],
-        assigned_sites=current_user.get("assigned_sites", []),
-        created_at=current_user["created_at"]
-    )
+    return user_out(current_user, current_user)
 
 
-# ============ USER MANAGEMENT ROUTES (Manager Only) ============
+# ============ USER MANAGEMENT ROUTES (office only) ============
 
 @api_router.get("/users", response_model=List[UserResponse])
-async def get_users(current_user: dict = Depends(get_current_manager)):
-    """Get all users (workers and managers)"""
-    users = await db.users.find().to_list(1000)
-    return [UserResponse(
-        id=str(u["_id"]),
-        email=u["email"],
-        name=u["name"],
-        role=u["role"],
-        assigned_sites=u.get("assigned_sites", []),
-        created_at=u["created_at"]
-    ) for u in users if str(u["_id"]) != str(current_user["_id"])]  # Exclude current user
+async def get_users(current_user: dict = Depends(get_current_office_user)):
+    users = await db.users.find().sort("name", 1).to_list(5000)
+    return [user_out(u, current_user) for u in users if str(u["_id"]) != str(current_user["_id"])]
+
+
+@api_router.get("/users/meta")
+async def get_user_meta(current_user: dict = Depends(get_current_user)):
+    """Lists of roles, specialties and levels for the app's pickers."""
+    return {"roles": ALL_ROLES, "office_roles": sorted(OFFICE_ROLES), "specialties": SPECIALTIES,
+            "levels": LEVELS, "can_see_pay_rates": current_user.get("role") in PAY_RATE_VIEWERS}
 
 
 @api_router.post("/users", response_model=UserResponse)
-async def create_user(user_data: UserCreate, current_user: dict = Depends(get_current_manager)):
-    # Check if user already exists
-    existing_user = await db.users.find_one({"email": user_data.email})
-    if existing_user:
+async def create_user(user_data: UserCreate, current_user: dict = Depends(get_current_office_user)):
+    data = validate_user_fields(user_data.model_dump(), current_user)
+    if await db.users.find_one({"email": data["email"]}):
         raise HTTPException(status_code=400, detail="User with this email already exists")
-    
-    user_dict = user_data.model_dump()
-    user_dict["password"] = get_password_hash(user_data.password)
-    user_dict["created_at"] = datetime.utcnow()
-    
-    result = await db.users.insert_one(user_dict)
-    
-    created_user = await db.users.find_one({"_id": result.inserted_id})
-    return UserResponse(
-        id=str(created_user["_id"]),
-        email=created_user["email"],
-        name=created_user["name"],
-        role=created_user["role"],
-        assigned_sites=created_user.get("assigned_sites", []),
-        created_at=created_user["created_at"]
-    )
+    if len(data["password"]) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+    data["password"] = get_password_hash(data["password"])
+    data["created_at"] = datetime.utcnow()
+    data["active"] = True if data.get("active") is None else data["active"]
+    data["specialties"] = data.get("specialties") or []
+    if data["role"] in OFFICE_ROLES:
+        data["assigned_sites"] = []
+    result = await db.users.insert_one(data)
+    return user_out(await db.users.find_one({"_id": result.inserted_id}), current_user)
 
 
 @api_router.put("/users/{user_id}", response_model=UserResponse)
-async def update_user(user_id: str, user_data: UserUpdate, current_user: dict = Depends(get_current_manager)):
-    update_dict = {k: v for k, v in user_data.model_dump().items() if v is not None}
-    
-    if "password" in update_dict:
-        update_dict["password"] = get_password_hash(update_dict["password"])
-    
-    if update_dict:
-        await db.users.update_one(
-            {"_id": ObjectId(user_id)},
-            {"$set": update_dict}
-        )
-    
-    updated_user = await db.users.find_one({"_id": ObjectId(user_id)})
-    if not updated_user:
+async def update_user(user_id: str, user_data: UserUpdate, current_user: dict = Depends(get_current_office_user)):
+    target = await db.users.find_one({"_id": ObjectId(user_id)})
+    if not target:
         raise HTTPException(status_code=404, detail="User not found")
-    
-    return UserResponse(
-        id=str(updated_user["_id"]),
-        email=updated_user["email"],
-        name=updated_user["name"],
-        role=updated_user["role"],
-        assigned_sites=updated_user.get("assigned_sites", []),
-        created_at=updated_user["created_at"]
-    )
+    if target.get("role") == ROLE_ADMIN and current_user.get("role") != ROLE_ADMIN:
+        raise HTTPException(status_code=403, detail="Only an admin can edit an admin")
+    update = {k: v for k, v in user_data.model_dump().items() if v is not None}
+    update = validate_user_fields(update, current_user)
+    if "email" in update and await db.users.find_one({"email": update["email"], "_id": {"$ne": target["_id"]}}):
+        raise HTTPException(status_code=400, detail="Another user already has this email")
+    if "password" in update:
+        if len(update["password"]) < 8:
+            raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+        update["password"] = get_password_hash(update["password"])
+    if update.get("role") in OFFICE_ROLES:
+        update["assigned_sites"] = []
+    if update:
+        await db.users.update_one({"_id": target["_id"]}, {"$set": update})
+    return user_out(await db.users.find_one({"_id": target["_id"]}), current_user)
 
 
 @api_router.delete("/users/{user_id}")
-async def delete_user(user_id: str, current_user: dict = Depends(get_current_manager)):
-    result = await db.users.delete_one({"_id": ObjectId(user_id)})
-    if result.deleted_count == 0:
+async def delete_user(user_id: str, current_user: dict = Depends(get_current_office_user)):
+    target = await db.users.find_one({"_id": ObjectId(user_id)})
+    if not target:
         raise HTTPException(status_code=404, detail="User not found")
+    if target.get("role") == ROLE_ADMIN and current_user.get("role") != ROLE_ADMIN:
+        raise HTTPException(status_code=403, detail="Only an admin can delete an admin")
+    await db.users.delete_one({"_id": target["_id"]})
     return {"message": "User deleted successfully"}
 
 
-# ============ SITE ROUTES ============
+# ============ SITE (PROJECT) ROUTES ============
+
+async def site_out(s_: dict) -> SiteResponse:
+    on_site = await db.clock_records.count_documents({"site_id": str(s_["_id"]), "status": "clocked_in"})
+    return SiteResponse(
+        id=str(s_["_id"]),
+        name=s_["name"],
+        address=s_["address"],
+        location=s_.get("location"),
+        geofence_radius_m=s_.get("geofence_radius_m") or DEFAULT_GEOFENCE_M,
+        status=s_.get("status", "active"),
+        project_number=s_.get("project_number"),
+        general_contractor=s_.get("general_contractor"),
+        job_type=s_.get("job_type"),
+        contract_value=s_.get("contract_value"),
+        start_date=s_.get("start_date"),
+        end_date=s_.get("end_date"),
+        created_at=s_["created_at"],
+        shutdown_reason=s_.get("shutdown_reason"),
+        shutdown_at=s_.get("shutdown_at"),
+        shutdown_by_name=s_.get("shutdown_by_name"),
+        workers_on_site=on_site,
+    )
+
+
+def validate_site_fields(data: dict) -> dict:
+    if data.get("status") and data["status"] not in SITE_STATUSES:
+        raise HTTPException(status_code=400, detail="Unknown status")
+    if data.get("status") == "shutdown":
+        raise HTTPException(status_code=400, detail="Use the Shut Down action so a reason is recorded")
+    if data.get("job_type") and data["job_type"] not in JOB_TYPES:
+        raise HTTPException(status_code=400, detail="Unknown job type")
+    return data
+
+
+async def geocode_address(address: str):
+    """Best-effort lookup of a site's coordinates from its address (OpenStreetMap Nominatim).
+    Used only when no location was given. Returns {latitude, longitude} or None."""
+    import asyncio
+    import json as _json
+    import urllib.parse
+    import urllib.request
+
+    def lookup():
+        url = "https://nominatim.openstreetmap.org/search?" + urllib.parse.urlencode(
+            {"q": address, "format": "json", "limit": 1})
+        req = urllib.request.Request(url, headers={"User-Agent": "VanGuard-Drywall-App/2.0"})
+        with urllib.request.urlopen(req, timeout=8) as r:
+            hits = _json.loads(r.read().decode())
+        if hits:
+            return {"latitude": float(hits[0]["lat"]), "longitude": float(hits[0]["lon"])}
+        return None
+    try:
+        return await asyncio.get_event_loop().run_in_executor(None, lookup)
+    except Exception:  # noqa: BLE001
+        logger.info("Could not geocode address: %s", address)
+        return None
+
 
 @api_router.get("/sites", response_model=List[SiteResponse])
 async def get_sites(current_user: dict = Depends(get_current_user)):
-    if current_user["role"] == "manager":
-        sites = await db.sites.find().to_list(1000)
+    if is_office(current_user):
+        sites = await db.sites.find().sort("name", 1).to_list(1000)
     else:
-        # Workers only see their assigned sites
-        assigned_site_ids = current_user.get("assigned_sites", [])
-        sites = await db.sites.find({"_id": {"$in": [ObjectId(sid) for sid in assigned_site_ids]}}).to_list(1000)
-    
-    return [SiteResponse(
-        id=str(s["_id"]),
-        name=s["name"],
-        address=s["address"],
-        location=s.get("location"),
-        status=s.get("status", "active"),
-        created_at=s["created_at"]
-    ) for s in sites]
+        ids = [ObjectId(sid) for sid in current_user.get("assigned_sites", []) if ObjectId.is_valid(sid)]
+        sites = await db.sites.find({"_id": {"$in": ids}}).sort("name", 1).to_list(1000)
+    return [await site_out(s_) for s_ in sites]
 
 
 @api_router.post("/sites", response_model=SiteResponse)
-async def create_site(site_data: SiteCreate, current_user: dict = Depends(get_current_manager)):
-    site_dict = site_data.model_dump()
-    site_dict["created_at"] = datetime.utcnow()
-    
-    result = await db.sites.insert_one(site_dict)
-    created_site = await db.sites.find_one({"_id": result.inserted_id})
-    
-    return SiteResponse(
-        id=str(created_site["_id"]),
-        name=created_site["name"],
-        address=created_site["address"],
-        location=created_site.get("location"),
-        status=created_site.get("status", "active"),
-        created_at=created_site["created_at"]
-    )
+async def create_site(site_data: SiteCreate, current_user: dict = Depends(get_current_office_user)):
+    data = validate_site_fields(site_data.model_dump())
+    if not data.get("location"):
+        data["location"] = await geocode_address(data["address"])
+    data["created_at"] = datetime.utcnow()
+    result = await db.sites.insert_one(data)
+    return await site_out(await db.sites.find_one({"_id": result.inserted_id}))
 
 
 @api_router.put("/sites/{site_id}", response_model=SiteResponse)
-async def update_site(site_id: str, site_data: SiteCreate, current_user: dict = Depends(get_current_manager)):
-    update_dict = site_data.model_dump()
-    
-    await db.sites.update_one(
-        {"_id": ObjectId(site_id)},
-        {"$set": update_dict}
-    )
-    
-    updated_site = await db.sites.find_one({"_id": ObjectId(site_id)})
-    if not updated_site:
+async def update_site(site_id: str, site_data: SiteUpdate, current_user: dict = Depends(get_current_office_user)):
+    site = await db.sites.find_one({"_id": ObjectId(site_id)})
+    if not site:
         raise HTTPException(status_code=404, detail="Site not found")
-    
-    return SiteResponse(
-        id=str(updated_site["_id"]),
-        name=updated_site["name"],
-        address=updated_site["address"],
-        location=updated_site.get("location"),
-        status=updated_site.get("status", "active"),
-        created_at=updated_site["created_at"]
-    )
+    update = validate_site_fields({k: v for k, v in site_data.model_dump().items() if v is not None})
+    if "address" in update and update["address"] != site.get("address") and "location" not in update:
+        located = await geocode_address(update["address"])
+        if located:
+            update["location"] = located
+    if update:
+        await db.sites.update_one({"_id": site["_id"]}, {"$set": update})
+        if "name" in update:  # keep denormalised names in step
+            await db.clock_records.update_many({"site_id": site_id}, {"$set": {"site_name": update["name"]}})
+    return await site_out(await db.sites.find_one({"_id": site["_id"]}))
+
+
+@api_router.post("/sites/{site_id}/shutdown", response_model=SiteResponse)
+async def shutdown_site(site_id: str, body: ShutdownRequest,
+                        current_user: dict = Depends(require_roles(*SHUTDOWN_ROLES))):
+    """Shut a job site down: nobody can clock in until it is reopened."""
+    site = await db.sites.find_one({"_id": ObjectId(site_id)})
+    if not site:
+        raise HTTPException(status_code=404, detail="Site not found")
+    now = datetime.utcnow()
+    await db.sites.update_one({"_id": site["_id"]}, {"$set": {
+        "status": "shutdown", "shutdown_reason": body.reason.strip(), "shutdown_at": now,
+        "shutdown_by": str(current_user["_id"]), "shutdown_by_name": current_user["name"]}})
+    if body.clock_out_everyone:
+        async for rec in db.clock_records.find({"site_id": site_id, "status": "clocked_in"}):
+            hours = (now - rec["clock_in"]).total_seconds() / 3600
+            await db.clock_records.update_one({"_id": rec["_id"]}, {"$set": {
+                "clock_out": now, "clock_out_location": rec.get("clock_in_location"),
+                "total_hours": round(hours, 2), "status": "clocked_out",
+                "auto_clock_out_reason": "Site shut down: " + body.reason.strip()}})
+    await db.site_events.insert_one({"site_id": site_id, "event": "shutdown", "reason": body.reason.strip(),
+                                     "by": str(current_user["_id"]), "by_name": current_user["name"], "at": now})
+    logger.info("Site %s shut down by %s", site["name"], current_user["email"])
+    return await site_out(await db.sites.find_one({"_id": site["_id"]}))
+
+
+@api_router.post("/sites/{site_id}/reopen", response_model=SiteResponse)
+async def reopen_site(site_id: str, current_user: dict = Depends(require_roles(*SHUTDOWN_ROLES))):
+    site = await db.sites.find_one({"_id": ObjectId(site_id)})
+    if not site:
+        raise HTTPException(status_code=404, detail="Site not found")
+    await db.sites.update_one({"_id": site["_id"]}, {
+        "$set": {"status": "active"},
+        "$unset": {"shutdown_reason": "", "shutdown_at": "", "shutdown_by": "", "shutdown_by_name": ""}})
+    await db.site_events.insert_one({"site_id": site_id, "event": "reopen", "by": str(current_user["_id"]),
+                                     "by_name": current_user["name"], "at": datetime.utcnow()})
+    return await site_out(await db.sites.find_one({"_id": site["_id"]}))
 
 
 @api_router.delete("/sites/{site_id}")
-async def delete_site(site_id: str, current_user: dict = Depends(get_current_manager)):
+async def delete_site(site_id: str, current_user: dict = Depends(require_roles(ROLE_ADMIN, ROLE_PM))):
     result = await db.sites.delete_one({"_id": ObjectId(site_id)})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Site not found")
+    await db.users.update_many({}, {"$pull": {"assigned_sites": site_id}})
     return {"message": "Site deleted successfully"}
 
 
@@ -659,12 +863,28 @@ async def clock_in(clock_data: ClockInRequest, current_user: dict = Depends(get_
     
     if active_record:
         raise HTTPException(status_code=400, detail="Already clocked in. Please clock out first.")
-    
-    # Get site info
+
+    if not ObjectId.is_valid(clock_data.site_id):
+        raise HTTPException(status_code=404, detail="Site not found")
     site = await db.sites.find_one({"_id": ObjectId(clock_data.site_id)})
     if not site:
         raise HTTPException(status_code=404, detail="Site not found")
-    
+    if not can_access_site(current_user, clock_data.site_id):
+        raise HTTPException(status_code=403, detail="You're not assigned to this site. Ask your foreman or PM.")
+    if site.get("status") == "shutdown":
+        raise HTTPException(status_code=423, detail="%s is shut down: %s. Clock-in is disabled until it reopens."
+                            % (site["name"], site.get("shutdown_reason") or "no reason given"))
+    if site.get("status") == "completed":
+        raise HTTPException(status_code=423, detail="%s is marked completed." % site["name"])
+
+    ok, dist, problem = geofence_check(site, clock_data.location.model_dump(), clock_data.accuracy_m)
+    if not ok:
+        await db.clock_attempts.insert_one({
+            "user_id": str(current_user["_id"]), "user_name": current_user["name"], "site_id": clock_data.site_id,
+            "site_name": site["name"], "location": clock_data.location.model_dump(), "distance_m": dist,
+            "accuracy_m": clock_data.accuracy_m, "at": datetime.utcnow()})
+        raise HTTPException(status_code=403, detail=problem)
+
     record = {
         "user_id": str(current_user["_id"]),
         "user_name": current_user["name"],
@@ -676,9 +896,12 @@ async def clock_in(clock_data: ClockInRequest, current_user: dict = Depends(get_
         "clock_out_location": None,
         "total_hours": None,
         "status": "clocked_in",
-        "synced": True
+        "synced": True,
+        "clock_in_distance_m": dist,
+        "flagged": dist is None,
+        "flag_reason": problem if dist is None else None,
     }
-    
+
     result = await db.clock_records.insert_one(record)
     record["id"] = str(result.inserted_id)
     
@@ -698,6 +921,11 @@ async def clock_out(clock_data: ClockOutRequest, current_user: dict = Depends(ge
     
     clock_out_time = datetime.utcnow()
     clock_in_time = active_record["clock_in"]
+    out_site = await db.sites.find_one({"_id": ObjectId(active_record["site_id"])}) \
+        if ObjectId.is_valid(active_record["site_id"]) else None
+    out_dist = None
+    if out_site and out_site.get("location"):
+        out_dist = round(distance_m(out_site["location"], clock_data.location.model_dump()))
     total_hours = (clock_out_time - clock_in_time).total_seconds() / 3600
     
     await db.clock_records.update_one(
@@ -707,7 +935,8 @@ async def clock_out(clock_data: ClockOutRequest, current_user: dict = Depends(ge
             "clock_out_location": clock_data.location.model_dump(),
             "total_hours": round(total_hours, 2),
             "status": "clocked_out",
-            "synced": True
+            "synced": True,
+            "clock_out_distance_m": out_dist,
         }}
     )
     
@@ -1109,13 +1338,42 @@ async def sync_data(sync_request: SyncDataRequest, current_user: dict = Depends(
     for clock_record in sync_request.clock_records:
         try:
             # Check if record already exists
-            existing = await db.clock_records.find_one({"_id": ObjectId(clock_record.get("id"))})
+            rid = clock_record.get("id")
+            existing = await db.clock_records.find_one({"_id": ObjectId(rid)}) if rid and ObjectId.is_valid(rid) \
+                else await db.clock_records.find_one({"offline_id": rid}) if rid else None
             if not existing:
                 record_dict = clock_record.copy()
                 record_dict.pop("id", None)
+                record_dict["offline_id"] = rid
                 record_dict["user_id"] = str(current_user["_id"])
                 record_dict["user_name"] = current_user["name"]
                 record_dict["synced"] = True
+                # Offline clock-ins get the same checks; problems are flagged for the office
+                # rather than dropped, so nobody loses recorded hours.
+                problems = []
+                sid = record_dict.get("site_id")
+                site = await db.sites.find_one({"_id": ObjectId(sid)}) if sid and ObjectId.is_valid(sid) else None
+                if not site:
+                    problems.append("unknown site")
+                else:
+                    record_dict["site_name"] = site["name"]
+                    if not can_access_site(current_user, sid):
+                        problems.append("not assigned to this site")
+                    if site.get("status") == "shutdown":
+                        problems.append("site was shut down")
+                    loc = record_dict.get("clock_in_location")
+                    if loc:
+                        ok, dist, msg = geofence_check(site, loc, record_dict.get("accuracy_m"))
+                        record_dict["clock_in_distance_m"] = dist
+                        if not ok or dist is None:
+                            problems.append(msg)
+                    else:
+                        problems.append("no GPS location")
+                record_dict["flagged"] = bool(problems)
+                record_dict["flag_reason"] = "; ".join(problems) or None
+                for key in ("clock_in", "clock_out"):
+                    if isinstance(record_dict.get(key), str):
+                        record_dict[key] = datetime.fromisoformat(record_dict[key].replace("Z", "+00:00")).replace(tzinfo=None)
                 await db.clock_records.insert_one(record_dict)
                 synced_clock += 1
         except Exception as e:
@@ -1251,9 +1509,11 @@ async def generate_timesheet_report(
 @api_router.get("/reports/dashboard")
 async def get_dashboard_stats(current_user: dict = Depends(get_current_manager)):
     """Get dashboard statistics for managers"""
-    total_workers = await db.users.count_documents({"role": {"$ne": "manager"}})
-    total_managers = await db.users.count_documents({"role": "manager"}) - 1  # Exclude current user
-    total_sites = await db.sites.count_documents({})
+    total_workers = await db.users.count_documents({"role": {"$in": sorted(FIELD_ROLES)}})
+    total_managers = max(0, await db.users.count_documents({"role": {"$in": sorted(OFFICE_ROLES)}}) - 1)
+    total_sites = await db.sites.count_documents({"status": {"$ne": "completed"}})
+    shutdown_sites = await db.sites.count_documents({"status": "shutdown"})
+    flagged_open = await db.clock_records.count_documents({"flagged": True, "flag_reviewed": {"$ne": True}})
     
     # Currently clocked in workers
     clocked_in_count = await db.clock_records.count_documents({"status": "clocked_in"})
@@ -1283,7 +1543,9 @@ async def get_dashboard_stats(current_user: dict = Depends(get_current_manager))
         "clocked_in_workers": clocked_in_count,
         "expiring_safety_documents": expiring_count,
         "critical_expiring_safety_documents": critical_expiring_count,
-        "today_clock_records": today_records
+        "today_clock_records": today_records,
+        "shutdown_sites": shutdown_sites,
+        "flagged_clock_records": flagged_open,
     }
 
 
@@ -1455,7 +1717,7 @@ async def get_form_templates(
     current_user: dict = Depends(get_current_user)
 ):
     query = {}
-    if current_user["role"] == "manager":
+    if is_office(current_user):
         if site_id:
             query["site_id"] = site_id
     else:
@@ -1585,7 +1847,19 @@ async def delete_form_template(template_id: str, current_user: dict = Depends(ge
 # a random password). Nothing is hardcoded, and the password is never logged.
 @app.on_event("startup")
 async def startup_event():
-    if await db.users.find_one({"role": "manager"}):
+    # Map Oakdale-era roles onto the new ones (runs once; harmless afterwards).
+    for old, (new, level) in LEGACY_ROLES.items():
+        update = {"role": new}
+        if level:
+            update["level"] = level
+        res = await db.users.update_many({"role": old}, {"$set": update})
+        if res.modified_count:
+            logger.info("Migrated %d user(s) from role %s to %s", res.modified_count, old, new)
+    await db.users.create_index("email", unique=True)
+    await db.clock_records.create_index([("user_id", 1), ("status", 1)])
+    await db.clock_records.create_index([("site_id", 1), ("status", 1)])
+
+    if await db.users.find_one({"role": ROLE_ADMIN}):
         return
     admin_email = os.environ.get("ADMIN_EMAIL")
     admin_password = os.environ.get("ADMIN_PASSWORD")
@@ -1599,7 +1873,7 @@ async def startup_event():
         "email": admin_email.lower(),
         "password": get_password_hash(admin_password),
         "name": os.environ.get("ADMIN_NAME", "Administrator"),
-        "role": "manager",
+        "role": ROLE_ADMIN,
         "assigned_sites": [],
         "created_at": datetime.utcnow(),
     })

@@ -20,6 +20,7 @@ import { userService } from '../../src/services/userService';
 import { siteService } from '../../src/services/siteService';
 import { format } from 'date-fns';
 import { FormTemplate, FormField, User, Site, FormSubmission } from '../../src/types';
+import { isFieldRole } from '../../src/constants/roles';
 import { COLORS } from '../../src/constants/colors';
 import Footer from '../../src/components/Footer';
 
@@ -75,7 +76,7 @@ export default function FormsScreen() {
         formService.getFormSubmissions(),
       ]);
       setForms(formsRes);
-      setUsers(usersRes.filter((u: User) => u.role !== 'manager'));
+      setUsers(usersRes.filter((u: User) => isFieldRole(u.role)));
       setSites(sitesRes);
       setSubmissions(submissionsRes);
     } catch (error) {

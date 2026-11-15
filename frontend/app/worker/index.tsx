@@ -18,22 +18,14 @@ import { taskService } from '../../src/services/taskService';
 import { formService } from '../../src/services/formService';
 import syncService from '../../src/services/syncService';
 import { format } from 'date-fns';
+import { roleLabel } from '../../src/constants/roles';
 import { COLORS } from '../../src/constants/colors';
 import NetInfo from '@react-native-community/netinfo';
 import { useRouter } from 'expo-router';
 import Footer from '../../src/components/Footer';
 import { UserRole } from '../../src/types';
 
-const getRoleLabel = (role: UserRole): string => {
-  switch (role) {
-    case 'manager': return 'Manager';
-    case 'foreman': return 'Foreman';
-    case 'lead_hand': return 'Lead Hand';
-    case 'journeyman': return 'Journeyman';
-    case 'apprentice': return 'Apprentice';
-    default: return role;
-  }
-};
+const getRoleLabel = (role: UserRole): string => roleLabel(role);
 
 export default function WorkerDashboard() {
   const { user } = useAuthStore();

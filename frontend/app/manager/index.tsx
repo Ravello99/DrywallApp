@@ -144,7 +144,7 @@ export default function ManagerDashboard() {
                   <View style={styles.alertTextContainer}>
                     <Text style={styles.alertTitle}>Critical - Expiring in 30 Days</Text>
                     <Text style={styles.alertText}>
-                      {stats.critical_expiring_safety_documents} safety document(s) expiring within 30 days
+                      {stats.critical_expiring_safety_documents} safety document(s) expired or expiring within 7 days
                     </Text>
                   </View>
                 </View>
@@ -158,7 +158,7 @@ export default function ManagerDashboard() {
                   <View style={styles.alertTextContainer}>
                     <Text style={styles.alertTitle}>Warning - Expiring in 60 Days</Text>
                     <Text style={styles.alertText}>
-                      {stats.expiring_safety_documents} safety document(s) expiring within 60 days
+                      {stats.expiring_safety_documents} safety document(s) expiring within 14 days
                     </Text>
                   </View>
                 </View>

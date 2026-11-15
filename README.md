@@ -78,11 +78,12 @@ run.py     one-command launcher
 
 ## Roadmap
 
-- **Phase 0 – foundation:** ✅ clean repo, ✅ no default login or hardcoded secret, ✅ CORS config,
-  ✅ server launcher; next: role/permission model with project scoping, split API into modules,
-  Site → Project, file storage outside the database.
-- **Phase 1 – field operations:** employee profiles (pay, specialty, certs), server-side GPS radius
-  and job shutdown, scope workflows and hour budgets with over-budget flags, safety expiry alerts
+- **Phase 0 – foundation:** ✅ clean repo, ✅ no default login or hardcoded secret, ✅ server launcher,
+  ✅ VanGuard navy/gold rebrand, ✅ roles (admin, project coordinator, estimator, project manager,
+  foreman, employee) with site scoping, ✅ server-side GPS clock-in radius, ✅ job site shutdown,
+  ✅ employee profiles (phone, emergency contact, trade, level, pay rate). Next: split the API into
+  modules, file storage outside the database.
+- **Phase 1 – field operations:** scope workflows and hour budgets with over-budget flags, safety expiry alerts
   (2 weeks employee / 1 week + expired foreman), foreman forms, manpower requests, dashboards.
 - **Phase 2 – money and materials:** progress draws, material requests/releases vs draw %,
   change orders, RFIs, job costing and margins.

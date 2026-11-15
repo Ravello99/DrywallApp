@@ -1,16 +1,21 @@
 import api from './api';
 
 export const clockService = {
-  async clockIn(siteId: string, location: { latitude: number; longitude: number }) {
+  async clockIn(
+    siteId: string,
+    location: { latitude: number; longitude: number },
+    accuracyM?: number | null,
+  ) {
     const response = await api.post('/clock/in', {
       site_id: siteId,
       location,
+      accuracy_m: accuracyM ?? null,
     });
     return response.data;
   },
 
-  async clockOut(location: { latitude: number; longitude: number }) {
-    const response = await api.post('/clock/out', { location });
+  async clockOut(location: { latitude: number; longitude: number }, accuracyM?: number | null) {
+    const response = await api.post('/clock/out', { location, accuracy_m: accuracyM ?? null });
     return response.data;
   },
 

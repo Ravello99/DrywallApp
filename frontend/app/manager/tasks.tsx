@@ -21,6 +21,7 @@ import { userService } from '../../src/services/userService';
 import { siteService } from '../../src/services/siteService';
 import { format } from 'date-fns';
 import { Task, User, Site } from '../../src/types';
+import { isFieldRole } from '../../src/constants/roles';
 import { COLORS } from '../../src/constants/colors';
 import Footer from '../../src/components/Footer';
 
@@ -68,7 +69,7 @@ export default function TasksScreen() {
         siteService.getSites(),
       ]);
       setTasks(tasksRes);
-      setUsers(usersRes.filter((u: User) => u.role !== 'manager'));
+      setUsers(usersRes.filter((u: User) => isFieldRole(u.role)));
       setSites(sitesRes);
 
       if (sitesRes.length > 0 && !selectedSite) {

@@ -1,5 +1,11 @@
 // User Roles
-export type UserRole = 'manager' | 'apprentice' | 'journeyman' | 'lead_hand' | 'foreman';
+export type UserRole =
+  | 'admin'
+  | 'project_coordinator'
+  | 'estimator'
+  | 'project_manager'
+  | 'foreman'
+  | 'employee';
 
 export interface User {
   id: string;
@@ -8,7 +14,17 @@ export interface User {
   role: UserRole;
   assigned_sites: string[];
   created_at: string;
+  phone?: string | null;
+  emergency_contact_name?: string | null;
+  emergency_contact_phone?: string | null;
+  specialties?: string[];
+  level?: string | null;
+  hire_date?: string | null;
+  pay_rate?: number | null; // only returned to admin / PM / coordinator (and the person themselves)
+  active?: boolean;
 }
+
+export type SiteStatus = 'active' | 'shutdown' | 'completed';
 
 export interface Site {
   id: string;
@@ -17,8 +33,19 @@ export interface Site {
   location?: {
     latitude: number;
     longitude: number;
-  };
-  status: string;
+  } | null;
+  geofence_radius_m: number;
+  status: SiteStatus;
+  project_number?: string | null;
+  general_contractor?: string | null;
+  job_type?: string | null;
+  contract_value?: number | null;
+  start_date?: string | null;
+  end_date?: string | null;
+  shutdown_reason?: string | null;
+  shutdown_at?: string | null;
+  shutdown_by_name?: string | null;
+  workers_on_site: number;
   created_at: string;
 }
 
@@ -41,6 +68,11 @@ export interface ClockRecord {
   total_hours?: number;
   status: string;
   synced?: boolean;
+  clock_in_distance_m?: number | null;
+  clock_out_distance_m?: number | null;
+  flagged?: boolean;
+  flag_reason?: string | null;
+  auto_clock_out_reason?: string | null;
 }
 
 export interface SafetyDocument {

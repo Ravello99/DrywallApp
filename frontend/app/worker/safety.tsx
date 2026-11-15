@@ -192,6 +192,7 @@ export default function SafetyScreen() {
 
   const getExpiryLabel = (doc: SafetyDocument) => {
     if (!doc.expiry_date) return 'No expiry';
+    if (doc.days_until_expiry != null && doc.days_until_expiry < 0) return `⛔ EXPIRED ${Math.abs(doc.days_until_expiry)} days ago`;
     if (doc.is_expiring_critical) return `⚠️ ${doc.days_until_expiry} days left`;
     if (doc.is_expiring_soon) return `⚠ ${doc.days_until_expiry} days left`;
     return `${doc.days_until_expiry} days left`;

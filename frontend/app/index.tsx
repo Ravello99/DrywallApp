@@ -18,6 +18,7 @@ import { useAuthStore } from '../src/store/authStore';
 import { MaterialIcons } from '@expo/vector-icons';
 import { COLORS } from '../src/constants/colors';
 import Footer from '../src/components/Footer';
+import { isOfficeRole } from '../src/constants/roles';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -39,7 +40,7 @@ export default function LoginScreen() {
       if (token && storedUser) {
         setUser(storedUser);
         // Navigate based on role
-        if (storedUser.role === 'manager') {
+        if (isOfficeRole(storedUser.role)) {
           router.replace('/manager');
         } else {
           router.replace('/worker');
@@ -64,7 +65,7 @@ export default function LoginScreen() {
       setUser(user);
       
       // Navigate based on role
-      if (user.role === 'manager') {
+      if (isOfficeRole(user.role)) {
         router.replace('/manager');
       } else {
         router.replace('/worker');

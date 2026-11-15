@@ -72,10 +72,12 @@ export default function SafetyReviewScreen() {
     
     const daysUntil = doc.days_until_expiry ?? differenceInDays(new Date(doc.expiry_date), new Date());
     
-    if (daysUntil <= 30) {
+    if (daysUntil < 0) {
+      return { status: 'critical', color: COLORS.error, label: `EXPIRED ${Math.abs(daysUntil)} days ago` };
+    } else if (daysUntil <= 7) {
       return { status: 'critical', color: COLORS.error, label: `${daysUntil} days - CRITICAL` };
-    } else if (daysUntil <= 60) {
-      return { status: 'warning', color: '#D98E04', label: `${daysUntil} days - WARNING` };
+    } else if (daysUntil <= 14) {
+      return { status: 'warning', color: COLORS.warning, label: `${daysUntil} days - WARNING` };
     } else {
       return { status: 'safe', color: COLORS.success, label: `${daysUntil} days` };
     }
@@ -164,7 +166,7 @@ export default function SafetyReviewScreen() {
           >
             <MaterialIcons name="warning" size={16} color={expiryFilter === 'warning' ? COLORS.white : '#D98E04'} />
             <Text style={[styles.filterTabText, styles.filterTabTextWarning, expiryFilter === 'warning' && styles.filterTabTextActive]}>
-              30-60 Days ({counts.warning})
+              8-14 Days ({counts.warning})
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -186,7 +188,7 @@ export default function SafetyReviewScreen() {
             <View style={[styles.alertItem, styles.alertCritical]}>
               <MaterialIcons name="error" size={20} color={COLORS.error} />
               <Text style={styles.alertText}>
-                <Text style={styles.alertBold}>{counts.critical}</Text> document(s) expiring within 30 days!
+                <Text style={styles.alertBold}>{counts.critical}</Text> document(s) expired or expiring within 7 days!
               </Text>
             </View>
           )}
@@ -194,7 +196,7 @@ export default function SafetyReviewScreen() {
             <View style={[styles.alertItem, styles.alertWarning]}>
               <MaterialIcons name="warning" size={20} color="#D98E04" />
               <Text style={styles.alertText}>
-                <Text style={styles.alertBold}>{counts.warning}</Text> document(s) expiring within 30-60 days
+                <Text style={styles.alertBold}>{counts.warning}</Text> document(s) expiring within 8-14 days
               </Text>
             </View>
           )}
@@ -260,9 +262,9 @@ export default function SafetyReviewScreen() {
             </Text>
             <Text style={styles.emptyText}>
               {expiryFilter === 'critical' 
-                ? 'No documents expiring within 30 days' 
+                ? 'No documents expired or expiring within 7 days' 
                 : expiryFilter === 'warning'
-                ? 'No documents expiring within 30-60 days'
+                ? 'No documents expiring within 8-14 days'
                 : 'Safety documents will appear here'}
             </Text>
           </View>

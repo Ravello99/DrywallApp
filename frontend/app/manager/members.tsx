@@ -10,48 +10,40 @@ import {
   TextInput,
   Modal,
   RefreshControl,
+  Switch,
 } from 'react-native';
+import * as Location from 'expo-location';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { userService } from '../../src/services/userService';
 import { siteService } from '../../src/services/siteService';
 import { User, Site, UserRole } from '../../src/types';
 import { COLORS } from '../../src/constants/colors';
+import { useAuthStore } from '../../src/store/authStore';
+import {
+  ROLE_OPTIONS,
+  SPECIALTY_OPTIONS,
+  LEVEL_OPTIONS,
+  JOB_TYPE_OPTIONS,
+  isOfficeRole,
+  roleLabel,
+  roleColor,
+  specialtyLabel,
+  levelLabel,
+  jobTypeLabel,
+  canSeePayRates,
+  canShutDownSites,
+} from '../../src/constants/roles';
 import Footer from '../../src/components/Footer';
 import ModalPicker from '../../src/components/ModalPicker';
 
-const WORKER_ROLES: { value: UserRole; label: string }[] = [
-  { value: 'apprentice', label: 'Apprentice' },
-  { value: 'journeyman', label: 'Journeyman' },
-  { value: 'lead_hand', label: 'Lead-Hand' },
-  { value: 'foreman', label: 'Foreman' },
-];
+const getRoleLabel = roleLabel;
+const getRoleColor = roleColor;
 
-const ALL_ROLES: { value: UserRole; label: string }[] = [
-  ...WORKER_ROLES,
-  { value: 'manager', label: 'Manager' },
-];
-
-const getRoleLabel = (role: string): string => {
-  const found = ALL_ROLES.find(r => r.value === role);
-  return found?.label || role;
-};
-
-const getRoleColor = (role: string): string => {
-  switch (role) {
-    case 'manager':
-      return COLORS.primary;
-    case 'foreman':
-      return '#4CAF50';
-    case 'lead_hand':
-      return '#2196F3';
-    case 'journeyman':
-      return '#9C27B0';
-    case 'apprentice':
-      return '#D98E04';
-    default:
-      return COLORS.gray500;
-  }
+const STATUS_STYLE: Record<string, { label: string; color: string }> = {
+  active: { label: 'Active', color: COLORS.success },
+  shutdown: { label: 'SHUT DOWN', color: COLORS.error },
+  completed: { label: 'Completed', color: COLORS.gray400 },
 };
 
 export default function MembersScreen() {
@@ -71,12 +63,34 @@ export default function MembersScreen() {
   const [memberName, setMemberName] = useState('');
   const [memberEmail, setMemberEmail] = useState('');
   const [memberPassword, setMemberPassword] = useState('');
-  const [memberRole, setMemberRole] = useState<UserRole>('apprentice');
+  const [memberRole, setMemberRole] = useState<UserRole>('employee');
   const [selectedSites, setSelectedSites] = useState<string[]>([]);
+  const [memberPhone, setMemberPhone] = useState('');
+  const [memberEmergencyName, setMemberEmergencyName] = useState('');
+  const [memberEmergencyPhone, setMemberEmergencyPhone] = useState('');
+  const [memberSpecialties, setMemberSpecialties] = useState<string[]>([]);
+  const [memberLevel, setMemberLevel] = useState('');
+  const [memberPayRate, setMemberPayRate] = useState('');
 
   // Site form
   const [siteName, setSiteName] = useState('');
   const [siteAddress, setSiteAddress] = useState('');
+  const [siteProjectNumber, setSiteProjectNumber] = useState('');
+  const [siteGC, setSiteGC] = useState('');
+  const [siteJobType, setSiteJobType] = useState('');
+  const [siteLat, setSiteLat] = useState('');
+  const [siteLng, setSiteLng] = useState('');
+  const [siteRadius, setSiteRadius] = useState('200');
+  const [locating, setLocating] = useState(false);
+
+  // Shutdown
+  const [shutdownSite, setShutdownSite] = useState<Site | null>(null);
+  const [shutdownReason, setShutdownReason] = useState('');
+  const [shutdownClockOut, setShutdownClockOut] = useState(true);
+
+  const { user: me } = useAuthStore();
+  const showPay = canSeePayRates(me?.role);
+  const canShutDown = canShutDownSites(me?.role);
 
   useEffect(() => {
     loadData();
@@ -108,39 +122,158 @@ export default function MembersScreen() {
     setMemberName('');
     setMemberEmail('');
     setMemberPassword('');
-    setMemberRole('apprentice');
+    setMemberRole('employee');
     setSelectedSites([]);
     setSelectedMember(null);
+    setMemberPhone('');
+    setMemberEmergencyName('');
+    setMemberEmergencyPhone('');
+    setMemberSpecialties([]);
+    setMemberLevel('');
+    setMemberPayRate('');
   };
+
+  const memberPayload = () => {
+    const office = isOfficeRole(memberRole);
+    const payload: any = {
+      name: memberName.trim(),
+      email: memberEmail.trim(),
+      role: memberRole,
+      assigned_sites: office ? [] : selectedSites,
+      phone: memberPhone.trim() || null,
+      emergency_contact_name: memberEmergencyName.trim() || null,
+      emergency_contact_phone: memberEmergencyPhone.trim() || null,
+      specialties: memberSpecialties,
+      level: office ? null : memberLevel || null,
+    };
+    if (showPay && memberPayRate.trim() !== '') {
+      const rate = parseFloat(memberPayRate);
+      if (isNaN(rate) || rate < 0) throw new Error('Pay rate must be a number, e.g. 38.50');
+      payload.pay_rate = rate;
+    }
+    return payload;
+  };
+
+  const toggleSpecialty = (value: string) =>
+    setMemberSpecialties((prev) => (prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]));
 
   const resetSiteForm = () => {
     setSiteName('');
     setSiteAddress('');
+    setSiteProjectNumber('');
+    setSiteGC('');
+    setSiteJobType('');
+    setSiteLat('');
+    setSiteLng('');
+    setSiteRadius('200');
     setSelectedSiteForEdit(null);
+  };
+
+  const sitePayload = () => {
+    const payload: any = {
+      name: siteName.trim(),
+      address: siteAddress.trim(),
+      project_number: siteProjectNumber.trim() || null,
+      general_contractor: siteGC.trim() || null,
+      job_type: siteJobType || null,
+    };
+    const radius = parseInt(siteRadius, 10);
+    if (isNaN(radius) || radius < 25 || radius > 5000) throw new Error('Clock-in radius must be 25 to 5000 metres');
+    payload.geofence_radius_m = radius;
+    if (siteLat.trim() || siteLng.trim()) {
+      const lat = parseFloat(siteLat);
+      const lng = parseFloat(siteLng);
+      if (isNaN(lat) || isNaN(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+        throw new Error('GPS coordinates look wrong. Use "Use my current location" or leave them blank.');
+      }
+      payload.location = { latitude: lat, longitude: lng };
+    }
+    return payload;
+  };
+
+  const useMyLocation = async () => {
+    setLocating(true);
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Location needed', 'Allow location access to set the site from where you are standing.');
+        return;
+      }
+      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      setSiteLat(pos.coords.latitude.toFixed(6));
+      setSiteLng(pos.coords.longitude.toFixed(6));
+    } catch {
+      Alert.alert('Error', 'Could not get your location');
+    } finally {
+      setLocating(false);
+    }
+  };
+
+  const errorText = (error: any, fallback: string) => {
+    const d = error?.response?.data?.detail;
+    if (typeof d === 'string') return d;
+    if (Array.isArray(d)) return d.map((x: any) => x.msg).join('\n');
+    return error?.message || fallback;
+  };
+
+  const handleShutdown = async () => {
+    if (!shutdownSite) return;
+    if (shutdownReason.trim().length < 3) {
+      Alert.alert('Reason needed', 'Enter a short reason, e.g. "Safety stand-down" or "Waiting on GC".');
+      return;
+    }
+    setActionLoading(true);
+    try {
+      await siteService.shutdownSite(shutdownSite.id, shutdownReason.trim(), shutdownClockOut);
+      Alert.alert('Site Shut Down', `${shutdownSite.name} is shut down. Nobody can clock in until it is reopened.`);
+      setShutdownSite(null);
+      setShutdownReason('');
+      setShutdownClockOut(true);
+      loadData();
+    } catch (error: any) {
+      Alert.alert('Error', errorText(error, 'Failed to shut down site'));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleReopen = (site: Site) => {
+    Alert.alert('Reopen Site', `Reopen ${site.name} so the crew can clock in again?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Reopen',
+        onPress: async () => {
+          try {
+            await siteService.reopenSite(site.id);
+            loadData();
+          } catch (error: any) {
+            Alert.alert('Error', errorText(error, 'Failed to reopen site'));
+          }
+        },
+      },
+    ]);
   };
 
   const handleAddMember = async () => {
     if (!memberName || !memberEmail || !memberPassword) {
-      Alert.alert('Error', 'Please fill all required fields');
+      Alert.alert('Error', 'Name, email and password are required');
+      return;
+    }
+    if (memberPassword.length < 8) {
+      Alert.alert('Error', 'Password must be at least 8 characters');
       return;
     }
 
     setActionLoading(true);
     try {
-      await userService.createUser({
-        name: memberName,
-        email: memberEmail,
-        password: memberPassword,
-        role: memberRole,
-        assigned_sites: memberRole === 'manager' ? [] : selectedSites,
-      });
+      await userService.createUser({ ...memberPayload(), password: memberPassword });
 
       Alert.alert('Success', `${getRoleLabel(memberRole)} added successfully!`);
       setShowAddMember(false);
       resetMemberForm();
       loadData();
     } catch (error: any) {
-      Alert.alert('Error', error.response?.data?.detail || 'Failed to add member');
+      Alert.alert('Error', errorText(error, 'Failed to add member'));
     } finally {
       setActionLoading(false);
     }
@@ -152,6 +285,12 @@ export default function MembersScreen() {
     setMemberEmail(member.email);
     setMemberRole(member.role as UserRole);
     setSelectedSites(member.assigned_sites || []);
+    setMemberPhone(member.phone || '');
+    setMemberEmergencyName(member.emergency_contact_name || '');
+    setMemberEmergencyPhone(member.emergency_contact_phone || '');
+    setMemberSpecialties(member.specialties || []);
+    setMemberLevel(member.level || '');
+    setMemberPayRate(member.pay_rate != null ? String(member.pay_rate) : '');
     setShowEditMember(true);
   };
 
@@ -161,10 +300,7 @@ export default function MembersScreen() {
     setActionLoading(true);
     try {
       await userService.updateUser(selectedMember.id, {
-        name: memberName,
-        email: memberEmail,
-        role: memberRole,
-        assigned_sites: memberRole === 'manager' ? [] : selectedSites,
+        ...memberPayload(),
         ...(memberPassword && { password: memberPassword }),
       });
 
@@ -173,7 +309,7 @@ export default function MembersScreen() {
       resetMemberForm();
       loadData();
     } catch (error: any) {
-      Alert.alert('Error', error.response?.data?.detail || 'Failed to update member');
+      Alert.alert('Error', errorText(error, 'Failed to update member'));
     } finally {
       setActionLoading(false);
     }
@@ -204,24 +340,25 @@ export default function MembersScreen() {
 
   const handleAddSite = async () => {
     if (!siteName || !siteAddress) {
-      Alert.alert('Error', 'Please fill all fields');
+      Alert.alert('Error', 'Site name and address are required');
       return;
     }
 
     setActionLoading(true);
     try {
-      await siteService.createSite({
-        name: siteName,
-        address: siteAddress,
-        status: 'active',
-      });
+      const created = await siteService.createSite({ ...sitePayload(), status: 'active' });
 
-      Alert.alert('Success', 'Site added successfully!');
+      Alert.alert(
+        'Site Added',
+        created.location
+          ? `${created.name} added. Crew must be within ${created.geofence_radius_m} m of it to clock in.`
+          : `${created.name} added, but its GPS location couldn't be found from the address. Edit the site and tap "Use my current location" while on site, or clock-ins will be flagged.`,
+      );
       setShowAddSite(false);
       resetSiteForm();
       loadData();
     } catch (error: any) {
-      Alert.alert('Error', 'Failed to add site');
+      Alert.alert('Error', errorText(error, 'Failed to add site'));
     } finally {
       setActionLoading(false);
     }
@@ -231,6 +368,12 @@ export default function MembersScreen() {
     setSelectedSiteForEdit(site);
     setSiteName(site.name);
     setSiteAddress(site.address);
+    setSiteProjectNumber(site.project_number || '');
+    setSiteGC(site.general_contractor || '');
+    setSiteJobType(site.job_type || '');
+    setSiteLat(site.location ? String(site.location.latitude) : '');
+    setSiteLng(site.location ? String(site.location.longitude) : '');
+    setSiteRadius(String(site.geofence_radius_m || 200));
     setShowEditSite(true);
   };
 
@@ -238,23 +381,20 @@ export default function MembersScreen() {
     if (!selectedSiteForEdit) return;
     
     if (!siteName || !siteAddress) {
-      Alert.alert('Error', 'Please fill all fields');
+      Alert.alert('Error', 'Site name and address are required');
       return;
     }
 
     setActionLoading(true);
     try {
-      await siteService.updateSite(selectedSiteForEdit.id, {
-        name: siteName,
-        address: siteAddress,
-      });
+      await siteService.updateSite(selectedSiteForEdit.id, sitePayload());
 
       Alert.alert('Success', 'Site updated successfully!');
       setShowEditSite(false);
       resetSiteForm();
       loadData();
     } catch (error: any) {
-      Alert.alert('Error', error.response?.data?.detail || 'Failed to update site');
+      Alert.alert('Error', errorText(error, 'Failed to update site'));
     } finally {
       setActionLoading(false);
     }
@@ -290,8 +430,91 @@ export default function MembersScreen() {
   };
 
   // Group members by role
-  const managers = members.filter(m => m.role === 'manager');
-  const workers = members.filter(m => m.role !== 'manager');
+  const managers = members.filter((m) => isOfficeRole(m.role));
+  const workers = members.filter((m) => !isOfficeRole(m.role));
+
+  const renderSiteFields = () => (
+    <>
+      <TextInput
+        style={styles.input}
+        placeholder="Site / Project Name"
+        value={siteName}
+        onChangeText={setSiteName}
+        placeholderTextColor={COLORS.gray400}
+      />
+      <TextInput
+        style={styles.input}
+        placeholder="Site Address"
+        value={siteAddress}
+        onChangeText={setSiteAddress}
+        multiline
+        placeholderTextColor={COLORS.gray400}
+      />
+      <TextInput
+        style={styles.input}
+        placeholder="Project Number (optional)"
+        value={siteProjectNumber}
+        onChangeText={setSiteProjectNumber}
+        placeholderTextColor={COLORS.gray400}
+      />
+      <TextInput
+        style={styles.input}
+        placeholder="General Contractor (optional)"
+        value={siteGC}
+        onChangeText={setSiteGC}
+        placeholderTextColor={COLORS.gray400}
+      />
+      <Text style={styles.label}>Job Type:</Text>
+      <ModalPicker
+        options={JOB_TYPE_OPTIONS}
+        selectedValue={siteJobType}
+        onValueChange={setSiteJobType}
+        placeholder="Select job type"
+      />
+
+      <Text style={styles.label}>Clock-in Location</Text>
+      <Text style={styles.helpText}>
+        Leave blank to look it up from the address, or stand on site and use your current location.
+      </Text>
+      <View style={styles.row}>
+        <TextInput
+          style={[styles.input, styles.half]}
+          placeholder="Latitude"
+          value={siteLat}
+          onChangeText={setSiteLat}
+          keyboardType="numbers-and-punctuation"
+          placeholderTextColor={COLORS.gray400}
+        />
+        <TextInput
+          style={[styles.input, styles.half]}
+          placeholder="Longitude"
+          value={siteLng}
+          onChangeText={setSiteLng}
+          keyboardType="numbers-and-punctuation"
+          placeholderTextColor={COLORS.gray400}
+        />
+      </View>
+      <TouchableOpacity style={styles.locateBtn} onPress={useMyLocation} disabled={locating}>
+        {locating ? (
+          <ActivityIndicator color={COLORS.primary} />
+        ) : (
+          <>
+            <MaterialIcons name="my-location" size={18} color={COLORS.primary} />
+            <Text style={styles.locateBtnText}>Use my current location</Text>
+          </>
+        )}
+      </TouchableOpacity>
+      <Text style={styles.label}>Clock-in radius (metres):</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="200"
+        value={siteRadius}
+        onChangeText={setSiteRadius}
+        keyboardType="number-pad"
+        placeholderTextColor={COLORS.gray400}
+      />
+    </>
+  );
 
   if (loading) {
     return (
@@ -322,8 +545,43 @@ export default function MembersScreen() {
               <View key={site.id} style={styles.siteCard}>
                 <MaterialIcons name="location-city" size={24} color={COLORS.primary} />
                 <View style={styles.siteInfo}>
-                  <Text style={styles.siteName}>{site.name}</Text>
+                  <View style={styles.siteTitleRow}>
+                    <Text style={styles.siteName}>
+                      {site.project_number ? `${site.project_number} · ` : ''}
+                      {site.name}
+                    </Text>
+                    <View style={[styles.statusPill, { backgroundColor: (STATUS_STYLE[site.status]?.color || COLORS.gray400) + '1A' }]}>
+                      <Text style={[styles.statusPillText, { color: STATUS_STYLE[site.status]?.color || COLORS.gray400 }]}>
+                        {STATUS_STYLE[site.status]?.label || site.status}
+                      </Text>
+                    </View>
+                  </View>
                   <Text style={styles.siteAddress}>{site.address}</Text>
+                  <Text style={styles.siteMeta}>
+                    {[jobTypeLabel(site.job_type), site.general_contractor].filter(Boolean).join(' · ')}
+                  </Text>
+                  <Text style={styles.siteMeta}>
+                    {site.workers_on_site} on site now ·{' '}
+                    {site.location ? `clock-in radius ${site.geofence_radius_m} m` : '⚠ no GPS location set'}
+                  </Text>
+                  {site.status === 'shutdown' && (
+                    <Text style={styles.shutdownNote}>
+                      Shut down{site.shutdown_by_name ? ` by ${site.shutdown_by_name}` : ''}: {site.shutdown_reason}
+                    </Text>
+                  )}
+                  {canShutDown && site.status !== 'completed' && (
+                    site.status === 'shutdown' ? (
+                      <TouchableOpacity style={[styles.shutdownBtn, styles.reopenBtn]} onPress={() => handleReopen(site)}>
+                        <MaterialIcons name="play-arrow" size={16} color={COLORS.success} />
+                        <Text style={[styles.shutdownBtnText, { color: COLORS.success }]}>Reopen Site</Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <TouchableOpacity style={styles.shutdownBtn} onPress={() => setShutdownSite(site)}>
+                        <MaterialIcons name="block" size={16} color={COLORS.error} />
+                        <Text style={styles.shutdownBtnText}>Shut Down Site</Text>
+                      </TouchableOpacity>
+                    )
+                  )}
                 </View>
                 <View style={styles.siteActions}>
                   <TouchableOpacity
@@ -354,7 +612,7 @@ export default function MembersScreen() {
         {managers.length > 0 && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Managers ({managers.length})</Text>
+              <Text style={styles.sectionTitle}>Office ({managers.length})</Text>
             </View>
             {managers.map((member) => (
               <View key={member.id} style={styles.memberCard}>
@@ -392,7 +650,7 @@ export default function MembersScreen() {
         {/* Workers Section */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Team Members ({workers.length})</Text>
+            <Text style={styles.sectionTitle}>Field Crew ({workers.length})</Text>
             <TouchableOpacity
               style={styles.addButton}
               onPress={() => setShowAddMember(true)}
@@ -413,8 +671,16 @@ export default function MembersScreen() {
                         {getRoleLabel(member.role)}
                       </Text>
                     </View>
+                    {(member.specialties?.length || member.level) ? (
+                      <Text style={styles.memberSites}>
+                        {[levelLabel(member.level), ...(member.specialties || []).map(specialtyLabel)]
+                          .filter(Boolean)
+                          .join(' · ')}
+                      </Text>
+                    ) : null}
                     <Text style={styles.memberSites}>
                       {member.assigned_sites?.length || 0} site(s) assigned
+                      {showPay && member.pay_rate != null ? `  ·  $${member.pay_rate.toFixed(2)}/hr` : ''}
                     </Text>
                   </View>
                 </View>
@@ -449,23 +715,10 @@ export default function MembersScreen() {
       {/* Add Site Modal */}
       <Modal visible={showAddSite} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
+          <ScrollView style={styles.modalScrollContent}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Add New Site</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Site Name"
-              value={siteName}
-              onChangeText={setSiteName}
-              placeholderTextColor={COLORS.gray400}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Site Address"
-              value={siteAddress}
-              onChangeText={setSiteAddress}
-              multiline
-              placeholderTextColor={COLORS.gray400}
-            />
+            {renderSiteFields()}
             <View style={styles.modalButtons}>
               <TouchableOpacity
                 style={[styles.modalButton, styles.cancelButton]}
@@ -489,29 +742,17 @@ export default function MembersScreen() {
               </TouchableOpacity>
             </View>
           </View>
+          </ScrollView>
         </View>
       </Modal>
 
       {/* Edit Site Modal */}
       <Modal visible={showEditSite} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
+          <ScrollView style={styles.modalScrollContent}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Edit Site</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Site Name"
-              value={siteName}
-              onChangeText={setSiteName}
-              placeholderTextColor={COLORS.gray400}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Site Address"
-              value={siteAddress}
-              onChangeText={setSiteAddress}
-              multiline
-              placeholderTextColor={COLORS.gray400}
-            />
+            {renderSiteFields()}
             <View style={styles.modalButtons}>
               <TouchableOpacity
                 style={[styles.modalButton, styles.cancelButton]}
@@ -531,6 +772,59 @@ export default function MembersScreen() {
                   <ActivityIndicator color={COLORS.white} />
                 ) : (
                   <Text style={styles.submitButtonText}>Update Site</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+          </ScrollView>
+        </View>
+      </Modal>
+
+      {/* Shut Down Site Modal */}
+      <Modal visible={!!shutdownSite} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Shut Down {shutdownSite?.name}</Text>
+            <Text style={styles.helpText}>
+              Nobody will be able to clock in at this site until it is reopened.
+            </Text>
+            <TextInput
+              style={[styles.input, { minHeight: 80 }]}
+              placeholder="Reason (e.g. Safety stand-down, waiting on GC, weather)"
+              value={shutdownReason}
+              onChangeText={setShutdownReason}
+              multiline
+              placeholderTextColor={COLORS.gray400}
+            />
+            <View style={styles.switchRow}>
+              <Text style={styles.switchLabel}>
+                Clock out everyone on site now ({shutdownSite?.workers_on_site || 0})
+              </Text>
+              <Switch
+                value={shutdownClockOut}
+                onValueChange={setShutdownClockOut}
+                trackColor={{ true: COLORS.primary, false: COLORS.gray300 }}
+              />
+            </View>
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => {
+                  setShutdownSite(null);
+                  setShutdownReason('');
+                }}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, { backgroundColor: COLORS.error }]}
+                onPress={handleShutdown}
+                disabled={actionLoading}
+              >
+                {actionLoading ? (
+                  <ActivityIndicator color={COLORS.white} />
+                ) : (
+                  <Text style={styles.submitButtonText}>Shut Down</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -564,7 +858,7 @@ export default function MembersScreen() {
               />
               <TextInput
                 style={styles.input}
-                placeholder={showEditMember ? 'New Password (optional)' : 'Password'}
+                placeholder={showEditMember ? 'New Password (optional)' : 'Password (8+ characters)'}
                 value={memberPassword}
                 onChangeText={setMemberPassword}
                 secureTextEntry
@@ -573,16 +867,70 @@ export default function MembersScreen() {
               
               <Text style={styles.label}>Select Role:</Text>
               <ModalPicker
-                options={ALL_ROLES.map((role) => ({
-                  label: role.label,
-                  value: role.value,
-                }))}
+                options={ROLE_OPTIONS.filter((r) => r.value !== 'admin' || me?.role === 'admin')}
                 selectedValue={memberRole}
                 onValueChange={(value) => setMemberRole(value as UserRole)}
                 placeholder="Select a role"
               />
               
-              {memberRole !== 'manager' && (
+              <TextInput
+                style={styles.input}
+                placeholder="Phone"
+                value={memberPhone}
+                onChangeText={setMemberPhone}
+                keyboardType="phone-pad"
+                placeholderTextColor={COLORS.gray400}
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="Emergency contact name"
+                value={memberEmergencyName}
+                onChangeText={setMemberEmergencyName}
+                placeholderTextColor={COLORS.gray400}
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="Emergency contact phone"
+                value={memberEmergencyPhone}
+                onChangeText={setMemberEmergencyPhone}
+                keyboardType="phone-pad"
+                placeholderTextColor={COLORS.gray400}
+              />
+              {showPay && (
+                <TextInput
+                  style={styles.input}
+                  placeholder="Hourly pay rate ($)"
+                  value={memberPayRate}
+                  onChangeText={setMemberPayRate}
+                  keyboardType="decimal-pad"
+                  placeholderTextColor={COLORS.gray400}
+                />
+              )}
+
+              {!isOfficeRole(memberRole) && (
+                <>
+                  <Text style={styles.label}>Level:</Text>
+                  <ModalPicker
+                    options={LEVEL_OPTIONS}
+                    selectedValue={memberLevel}
+                    onValueChange={setMemberLevel}
+                    placeholder="Select level"
+                  />
+                  <Text style={styles.label}>Specialties:</Text>
+                  {SPECIALTY_OPTIONS.map((opt) => (
+                    <TouchableOpacity key={opt.value} style={styles.checkboxRow} onPress={() => toggleSpecialty(opt.value)}>
+                      <MaterialIcons
+                        name={memberSpecialties.includes(opt.value) ? 'check-box' : 'check-box-outline-blank'}
+                        size={24}
+                        color={memberSpecialties.includes(opt.value) ? COLORS.primary : COLORS.gray400}
+                      />
+                      <Text style={styles.checkboxLabel}>{opt.label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </>
+              )}
+
+              {!isOfficeRole(memberRole) && (
                 <>
                   <Text style={styles.label}>Assign Sites:</Text>
                   {sites.map((site) => (
@@ -688,6 +1036,91 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.textSecondary,
     marginTop: 4,
+  },
+  siteTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  statusPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  statusPillText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  siteMeta: {
+    fontSize: 12,
+    color: COLORS.textLight,
+    marginTop: 4,
+  },
+  shutdownNote: {
+    fontSize: 13,
+    color: COLORS.error,
+    marginTop: 6,
+    fontWeight: '600',
+  },
+  shutdownBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 4,
+    marginTop: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.error,
+  },
+  reopenBtn: {
+    borderColor: COLORS.success,
+  },
+  shutdownBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.error,
+  },
+  helpText: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginBottom: 8,
+  },
+  row: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  half: {
+    flex: 1,
+  },
+  locateBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+    borderRadius: 8,
+    paddingVertical: 10,
+    marginBottom: 12,
+  },
+  locateBtnText: {
+    color: COLORS.primary,
+    fontWeight: '600',
+  },
+  switchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  switchLabel: {
+    flex: 1,
+    fontSize: 14,
+    color: COLORS.textPrimary,
+    marginRight: 8,
   },
   siteActions: {
     flexDirection: 'row',

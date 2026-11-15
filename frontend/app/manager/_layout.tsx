@@ -5,6 +5,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { COLORS } from '../../src/constants/colors';
 import { useAuthStore } from '../../src/store/authStore';
 import { authService } from '../../src/services/authService';
+import { isOfficeRole } from '../../src/constants/roles';
 
 export default function ManagerLayout() {
   const router = useRouter();
@@ -18,7 +19,7 @@ export default function ManagerLayout() {
   const checkAccess = async () => {
     try {
       // Check if user is in store
-      if (user && user.role === 'manager') {
+      if (user && isOfficeRole(user.role)) {
         setChecking(false);
         return;
       }
@@ -33,7 +34,7 @@ export default function ManagerLayout() {
         return;
       }
 
-      if (storedUser.role !== 'manager') {
+      if (!isOfficeRole(storedUser.role)) {
         // Not a manager - redirect to worker or login
         if (storedUser.role) {
           router.replace('/worker');

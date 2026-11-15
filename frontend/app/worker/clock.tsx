@@ -71,6 +71,18 @@ export default function ClockScreen() {
     }
   };
 
+  // Take a fresh, high-accuracy reading right when clocking in/out (the one from when the
+  // screen opened may be stale). Falls back to the last known reading.
+  const freshFix = async () => {
+    try {
+      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      setLocation(pos.coords);
+      return pos.coords;
+    } catch {
+      return location;
+    }
+  };
+
   const handleClockIn = async () => {
     if (!selectedSite) {
       Alert.alert('Error', 'Please select a site');
@@ -83,17 +95,29 @@ export default function ClockScreen() {
       return;
     }
 
+    if (selectedSite.status === 'shutdown') {
+      Alert.alert(
+        'Site Shut Down',
+        `${selectedSite.name} is shut down${selectedSite.shutdown_reason ? `: ${selectedSite.shutdown_reason}` : ''}. Clock-in is disabled until it reopens.`,
+      );
+      return;
+    }
+
     setActionLoading(true);
     try {
-      const record = await clockService.clockIn(selectedSite.id, {
-        latitude: location.latitude,
-        longitude: location.longitude,
-      });
-      
+      const fix = (await freshFix()) || location;
+      const record = await clockService.clockIn(
+        selectedSite.id,
+        { latitude: fix.latitude, longitude: fix.longitude },
+        fix.accuracy,
+      );
+
       setActiveRecord(record);
-      Alert.alert('Success', 'Clocked in successfully!');
+      Alert.alert('Clocked In', `You're clocked in at ${selectedSite.name}.`);
     } catch (error: any) {
-      Alert.alert('Error', error.response?.data?.detail || 'Failed to clock in');
+      const status = error.response?.status;
+      const title = status === 423 ? 'Site Shut Down' : status === 403 ? "Can't Clock In" : 'Error';
+      Alert.alert(title, error.response?.data?.detail || 'Failed to clock in. Check your connection.');
     } finally {
       setActionLoading(false);
     }
@@ -117,10 +141,11 @@ export default function ClockScreen() {
           onPress: async () => {
             setActionLoading(true);
             try {
-              await clockService.clockOut({
-                latitude: location.latitude,
-                longitude: location.longitude,
-              });
+              const fix = (await freshFix()) || location;
+              await clockService.clockOut(
+                { latitude: fix.latitude, longitude: fix.longitude },
+                fix.accuracy,
+              );
               
               setActiveRecord(null);
               Alert.alert('Success', 'Clocked out successfully!');

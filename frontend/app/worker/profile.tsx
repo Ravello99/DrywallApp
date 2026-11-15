@@ -6,6 +6,7 @@ import { useRouter } from 'expo-router';
 import { useAuthStore } from '../../src/store/authStore';
 import { authService } from '../../src/services/authService';
 import Footer from '../../src/components/Footer';
+import { roleLabel } from '../../src/constants/roles';
 import { COLORS } from '../../src/constants/colors';
 
 export default function ProfileScreen() {
@@ -38,7 +39,7 @@ export default function ProfileScreen() {
           <Text style={styles.name}>{user?.name}</Text>
           <Text style={styles.email}>{user?.email}</Text>
           <View style={styles.roleBadge}>
-            <Text style={styles.roleText}>Worker</Text>
+            <Text style={styles.roleText}>{roleLabel(user?.role)}</Text>
           </View>
         </View>
 
