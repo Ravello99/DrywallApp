@@ -68,6 +68,58 @@ that means the provider's firewall / security group. If `ufw` is active on the s
 | `.logs/` | `launcher.log`, `backend.log`, `mongod.log`, `expo.log` |
 | `.tools/` | Downloaded Python, Node.js and MongoDB |
 
+## What's in the app
+
+**Office (Admin, Project Manager, Project Coordinator, Estimator)**
+
+| Tab | What it does |
+|---|---|
+| Dashboard | Job sites at a glance (men on site, progress, hours vs budget, flags), shut-down sites, flagged clock-ins, receivables, notifications |
+| Projects | Every job; open one for **Overview** (money, materials vs billing, labour by scope, crew on site), **Tasks** (apply a scope workflow, hour budgets, progress), **Materials** (approve/release), **Crew** (assign, approve manpower), **RFIs**, **Change Orders**, **Draws** |
+| Bids | Bid log sorted Multi-Family / Commercial Fit-Out / Institutional, weekly submitted chart, win rate, follow-up reminders, paste-in invites, bid inbox, won bid → project |
+| Approvals | Material and manpower requests from foremen, flagged clock-ins (PM / Admin) |
+| Team | Employees (role, trade, level, pay rate, emergency contact), sites (GPS, radius, shut down / reopen) |
+| More | Timesheets & Excel export, safety documents, forms, all tasks, announcements |
+
+**Field (Foreman, Employee)**
+
+| Tab | What it does |
+|---|---|
+| Home | Hours this week, today's site, safety-document warnings; foremen also see each site's crew, progress and open tasks |
+| Clock | GPS-checked clock in/out, pick the task you're working on |
+| Calendar | Which site you're on each day, tasks due |
+| Tasks | Employees: their tasks. Foremen: every task on their sites, update progress |
+| Requests | Foremen: request materials, request or release crew by trade |
+| More | Forms (foremen can send forms to crew), RFIs and crew safety (foremen), hours history, safety docs, profile |
+
+**Automatic alerts** (checked hourly, sent once each): safety documents (2-week notice to the
+employee, 1-week and expired warnings to the foreman), tasks at 90% / over their hour budget,
+materials released more than 10 points ahead of billing, bid follow-ups and due dates, progress
+draws unpaid after 30/60/90 days.
+
+### Connecting the bid inbox
+
+Add to `backend/.env` on the server, then run `python3 run.py` again:
+
+```
+BID_INBOX_HOST=imap.gmail.com
+BID_INBOX_USER=bids@yourcompany.com
+BID_INBOX_PASSWORD=your-16-character-app-password
+```
+
+For Gmail / Google Workspace: turn on IMAP in Gmail settings and create an **App Password**
+(Google Account → Security → 2-Step Verification → App passwords). Microsoft 365 usually blocks
+password IMAP; forward bid invites to a Gmail address, or use **Paste invite email** in the app.
+The inbox is checked every 10 minutes (`BID_INBOX_POLL_MINUTES`), messages stay unread, and each
+email is imported only once.
+
+## Tests
+
+```bash
+python3 backend/tests/test_logic.py            # business rules (money, budgets, bids...)
+python3 backend/tests/offline/flow_test.py     # every feature end to end + permissions, no server needed
+```
+
 ## Project layout
 
 ```
@@ -78,13 +130,14 @@ run.py     one-command launcher
 
 ## Roadmap
 
-- **Phase 0 – foundation:** ✅ clean repo, ✅ no default login or hardcoded secret, ✅ server launcher,
-  ✅ VanGuard navy/gold rebrand, ✅ roles (admin, project coordinator, estimator, project manager,
-  foreman, employee) with site scoping, ✅ server-side GPS clock-in radius, ✅ job site shutdown,
-  ✅ employee profiles (phone, emergency contact, trade, level, pay rate). Next: split the API into
-  modules, file storage outside the database.
-- **Phase 1 – field operations:** scope workflows and hour budgets with over-budget flags, safety expiry alerts
-  (2 weeks employee / 1 week + expired foreman), foreman forms, manpower requests, dashboards.
-- **Phase 2 – money and materials:** progress draws, material requests/releases vs draw %,
-  change orders, RFIs, job costing and margins.
-- **Phase 3 – bids:** bid-inbox ingestion and sorting, bid log, win rates, follow-ups.
+- ✅ **Foundation:** clean repo, no default login or hardcoded secret, server launcher, VanGuard
+  rebrand, six roles with site scoping, server-side GPS radius, job shutdown, employee profiles,
+  API split into core / logic / feature modules.
+- ✅ **Field operations:** scope workflows, hour budgets and flags, safety alerts, foreman forms,
+  manpower requests, dashboards, calendar, hours.
+- ✅ **Money and materials:** progress draws with holdback and tax, material requests and releases
+  vs billing, change orders, RFIs, job costing and margins.
+- ✅ **Bids:** bid inbox, paste-in and manual bids, automatic sorting, bid log, win rates, follow-ups.
+- **Next:** HTTPS with a domain name (needed for web clock-in), phone push notifications,
+  installable phone app (instead of Expo Go), file storage outside the database for large
+  drawings, PDF progress-draw invoices.

@@ -19,6 +19,7 @@ import { formService } from '../../src/services/formService';
 import syncService from '../../src/services/syncService';
 import { format } from 'date-fns';
 import { roleLabel } from '../../src/constants/roles';
+import FieldOverview from '../../src/components/field/FieldOverview';
 import { COLORS } from '../../src/constants/colors';
 import NetInfo from '@react-native-community/netinfo';
 import { useRouter } from 'expo-router';
@@ -191,6 +192,9 @@ export default function WorkerDashboard() {
             )}
           </View>
         </View>
+
+        {/* Hours, today's site, safety docs and (foremen) my sites at a glance */}
+        <FieldOverview />
 
         {/* Quick Actions */}
         <View style={styles.quickActions}>

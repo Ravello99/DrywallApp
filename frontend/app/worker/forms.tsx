@@ -21,8 +21,12 @@ import { format } from 'date-fns';
 import { FormAssignment, FormTemplate, FormField } from '../../src/types';
 import { COLORS } from '../../src/constants/colors';
 import Footer from '../../src/components/Footer';
+import { useAuthStore } from '../../src/store/authStore';
+import AssignFormSheet from '../../src/components/field/AssignFormSheet';
 
 export default function WorkerFormsScreen() {
+  const { user } = useAuthStore();
+  const [assignOpen, setAssignOpen] = useState(false);
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -280,6 +284,18 @@ export default function WorkerFormsScreen() {
         <ScrollView
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         >
+          {user?.role === 'foreman' ? (
+            <View style={styles.section}>
+              <TouchableOpacity
+                onPress={() => setAssignOpen(true)}
+                style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: COLORS.primary, padding: 14, borderRadius: 12 }}
+              >
+                <MaterialIcons name="send" size={20} color={COLORS.white} />
+                <Text style={{ color: COLORS.white, fontWeight: '700', fontSize: 15 }}>Send a form to my crew</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
+
           {/* Pending Assignments */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Pending Forms ({assignments.length})</Text>
@@ -401,6 +417,7 @@ export default function WorkerFormsScreen() {
             </View>
           </View>
         </Modal>
+        <AssignFormSheet visible={assignOpen} onClose={() => setAssignOpen(false)} />
       </SafeAreaView>
     </>
   );

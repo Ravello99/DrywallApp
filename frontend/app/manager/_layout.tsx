@@ -54,6 +54,10 @@ export default function ManagerLayout() {
     }
   };
 
+  const role = user?.role || '';
+  const canBid = ['admin', 'project_coordinator', 'estimator', 'project_manager'].includes(role);
+  const canApprove = ['admin', 'project_manager'].includes(role);
+
   if (checking) {
     return (
       <View style={styles.loading}>
@@ -92,60 +96,55 @@ export default function ManagerLayout() {
         name="index"
         options={{
           title: 'Dashboard',
-          tabBarIcon: ({ color, size }) => (
-            <MaterialIcons name="dashboard" size={size} color={color} />
-          ),
+          tabBarIcon: ({ color, size }) => <MaterialIcons name="dashboard" size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="projects"
+        options={{
+          title: 'Projects',
+          tabBarIcon: ({ color, size }) => <MaterialIcons name="apartment" size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="bids"
+        options={{
+          title: 'Bids',
+          href: canBid ? undefined : null,
+          tabBarIcon: ({ color, size }) => <MaterialIcons name="request-quote" size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="approvals"
+        options={{
+          title: 'Approvals',
+          href: canApprove ? undefined : null,
+          tabBarIcon: ({ color, size }) => <MaterialIcons name="pending-actions" size={size} color={color} />,
         }}
       />
       <Tabs.Screen
         name="members"
         options={{
-          title: 'Members',
-          tabBarIcon: ({ color, size }) => (
-            <MaterialIcons name="people" size={size} color={color} />
-          ),
+          title: 'Team & Sites',
+          tabBarLabel: 'Team',
+          tabBarIcon: ({ color, size }) => <MaterialIcons name="people" size={size} color={color} />,
         }}
       />
       <Tabs.Screen
-        name="timesheets"
+        name="more"
         options={{
-          title: 'Timesheets',
-          tabBarIcon: ({ color, size }) => (
-            <MaterialIcons name="schedule" size={size} color={color} />
-          ),
+          title: 'More',
+          tabBarIcon: ({ color, size }) => <MaterialIcons name="menu" size={size} color={color} />,
         }}
       />
-      <Tabs.Screen
-        name="safety"
-        options={{
-          title: 'Safety Review',
-          tabBarIcon: ({ color, size }) => (
-            <MaterialIcons name="verified-user" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="announcements"
-        options={{
-          title: 'Announcements',
-          tabBarIcon: ({ color, size }) => (
-            <MaterialIcons name="campaign" size={size} color={color} />
-          ),
-        }}
-      />
-      {/* Hidden screens - accessible from dashboard only */}
-      <Tabs.Screen
-        name="tasks"
-        options={{
-          href: null, // Hide from tab bar
-        }}
-      />
-      <Tabs.Screen
-        name="forms"
-        options={{
-          href: null, // Hide from tab bar
-        }}
-      />
+      {/* Reached from the dashboard / More / project cards, not the tab bar */}
+      <Tabs.Screen name="timesheets" options={{ href: null, title: 'Timesheets' }} />
+      <Tabs.Screen name="safety" options={{ href: null, title: 'Safety Documents' }} />
+      <Tabs.Screen name="announcements" options={{ href: null, title: 'Announcements' }} />
+      <Tabs.Screen name="tasks" options={{ href: null, title: 'All Tasks' }} />
+      <Tabs.Screen name="forms" options={{ href: null, title: 'Forms' }} />
+      <Tabs.Screen name="notifications" options={{ href: null, title: 'Notifications' }} />
+      <Tabs.Screen name="project/[id]" options={{ href: null, title: 'Project' }} />
     </Tabs>
   );
 }

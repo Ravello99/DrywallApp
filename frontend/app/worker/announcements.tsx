@@ -67,7 +67,7 @@ export default function AnnouncementsScreen() {
               </View>
               
               <Text style={styles.title}>{announcement.title}</Text>
-              <Text style={styles.content}>{announcement.content}</Text>
+              <Text style={styles.contentText}>{announcement.content}</Text>
               
               <View style={styles.footer}>
                 <Text style={styles.author}>Posted by: {announcement.created_by_name}</Text>
@@ -133,7 +133,7 @@ const styles = StyleSheet.create({
     color: '#333',
     marginBottom: 8,
   },
-  content: {
+  contentText: {
     fontSize: 15,
     color: '#666',
     lineHeight: 22,

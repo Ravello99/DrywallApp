@@ -50,6 +50,8 @@ export default function WorkerLayout() {
     }
   };
 
+  const isForeman = user?.role === 'foreman';
+
   if (checking) {
     return (
       <View style={styles.loading}>
@@ -87,61 +89,58 @@ export default function WorkerLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Dashboard',
-          tabBarIcon: ({ color, size }) => (
-            <MaterialIcons name="dashboard" size={size} color={color} />
-          ),
+          title: 'Home',
+          tabBarIcon: ({ color, size }) => <MaterialIcons name="home" size={size} color={color} />,
         }}
       />
       <Tabs.Screen
         name="clock"
         options={{
           title: 'Clock In/Out',
-          tabBarIcon: ({ color, size }) => (
-            <MaterialIcons name="access-time" size={size} color={color} />
-          ),
+          tabBarLabel: 'Clock',
+          tabBarIcon: ({ color, size }) => <MaterialIcons name="access-time" size={size} color={color} />,
         }}
       />
       <Tabs.Screen
-        name="safety"
+        name="calendar"
         options={{
-          title: 'Safety Docs',
-          tabBarIcon: ({ color, size }) => (
-            <MaterialIcons name="security" size={size} color={color} />
-          ),
+          title: 'My Calendar',
+          tabBarLabel: 'Calendar',
+          tabBarIcon: ({ color, size }) => <MaterialIcons name="event" size={size} color={color} />,
         }}
       />
-      <Tabs.Screen
-        name="announcements"
-        options={{
-          title: 'Announcements',
-          tabBarIcon: ({ color, size }) => (
-            <MaterialIcons name="announcement" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: 'Profile',
-          tabBarIcon: ({ color, size }) => (
-            <MaterialIcons name="person" size={size} color={color} />
-          ),
-        }}
-      />
-      {/* Hidden screens - accessible from dashboard only */}
       <Tabs.Screen
         name="tasks"
         options={{
-          href: null, // Hide from tab bar
+          title: isForeman ? 'Site Tasks' : 'My Tasks',
+          tabBarLabel: 'Tasks',
+          tabBarIcon: ({ color, size }) => <MaterialIcons name="checklist" size={size} color={color} />,
         }}
       />
       <Tabs.Screen
-        name="forms"
+        name="requests"
         options={{
-          href: null, // Hide from tab bar
+          title: 'Requests',
+          href: isForeman ? undefined : null,
+          tabBarIcon: ({ color, size }) => <MaterialIcons name="local-shipping" size={size} color={color} />,
         }}
       />
+      <Tabs.Screen
+        name="more"
+        options={{
+          title: 'More',
+          tabBarIcon: ({ color, size }) => <MaterialIcons name="menu" size={size} color={color} />,
+        }}
+      />
+      {/* Reached from Home / More, not the tab bar */}
+      <Tabs.Screen name="forms" options={{ href: null, title: 'Forms' }} />
+      <Tabs.Screen name="safety" options={{ href: null, title: 'Safety Documents' }} />
+      <Tabs.Screen name="announcements" options={{ href: null, title: 'Announcements' }} />
+      <Tabs.Screen name="profile" options={{ href: null, title: 'Profile' }} />
+      <Tabs.Screen name="hours" options={{ href: null, title: 'My Hours' }} />
+      <Tabs.Screen name="rfis" options={{ href: null, title: 'RFIs' }} />
+      <Tabs.Screen name="crew-safety" options={{ href: null, title: 'Crew Safety' }} />
+      <Tabs.Screen name="notifications" options={{ href: null, title: 'Notifications' }} />
     </Tabs>
   );
 }

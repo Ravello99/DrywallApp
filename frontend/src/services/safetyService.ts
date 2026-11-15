@@ -7,6 +7,7 @@ export const safetyService = {
     file_data: string;
     file_name: string;
     description?: string;
+    expiry_date?: string;
   }) {
     const response = await api.post('/safety/upload', data);
     return response.data;

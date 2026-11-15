@@ -5,11 +5,13 @@ export const clockService = {
     siteId: string,
     location: { latitude: number; longitude: number },
     accuracyM?: number | null,
+    taskId?: string | null,
   ) {
     const response = await api.post('/clock/in', {
       site_id: siteId,
       location,
       accuracy_m: accuracyM ?? null,
+      task_id: taskId || null,
     });
     return response.data;
   },

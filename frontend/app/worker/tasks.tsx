@@ -17,6 +17,8 @@ import { format } from 'date-fns';
 import { Task } from '../../src/types';
 import { COLORS } from '../../src/constants/colors';
 import Footer from '../../src/components/Footer';
+import { useAuthStore } from '../../src/store/authStore';
+import ForemanTasks from '../../src/components/field/ForemanTasks';
 
 const PRIORITIES = [
   { value: 'high', label: 'High', color: COLORS.error },
@@ -24,7 +26,13 @@ const PRIORITIES = [
   { value: 'low', label: 'Low', color: COLORS.success },
 ];
 
-export default function WorkerTasksScreen() {
+// Foremen manage every task on their sites; employees see the tasks assigned to them.
+export default function TasksScreen() {
+  const { user } = useAuthStore();
+  return user?.role === 'foreman' ? <ForemanTasks /> : <WorkerTasksScreen />;
+}
+
+function WorkerTasksScreen() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -111,11 +119,6 @@ export default function WorkerTasksScreen() {
           title: 'My Tasks',
           headerStyle: { backgroundColor: COLORS.primary },
           headerTintColor: COLORS.white,
-          headerLeft: () => (
-            <TouchableOpacity onPress={() => router.back()} style={{ marginLeft: 8 }}>
-              <MaterialIcons name="arrow-back" size={24} color={COLORS.white} />
-            </TouchableOpacity>
-          ),
         }}
       />
       <SafeAreaView style={styles.container} edges={['bottom']}>

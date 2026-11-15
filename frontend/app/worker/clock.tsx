@@ -19,6 +19,8 @@ import { format } from 'date-fns';
 import { Site } from '../../src/types';
 import { COLORS } from '../../src/constants/colors';
 import Footer from '../../src/components/Footer';
+import { tasksApi, apiError } from '../../src/services/pmService';
+import { Chips } from '../../src/components/ui';
 
 export default function ClockScreen() {
   const [loading, setLoading] = useState(true);
@@ -28,6 +30,30 @@ export default function ClockScreen() {
   const [activeRecord, setActiveRecord] = useState<any>(null);
   const [location, setLocation] = useState<any>(null);
   const [showSiteModal, setShowSiteModal] = useState(false);
+  // "What are you working on?" (feeds task hour budgets)
+  const [siteTasks, setSiteTasks] = useState<{ id: string; title: string; scope_label?: string }[]>([]);
+  const [taskId, setTaskId] = useState('');
+
+  const siteForTasks = activeRecord?.site_id || selectedSite?.id;
+  useEffect(() => {
+    if (!siteForTasks) {
+      setSiteTasks([]);
+      return;
+    }
+    tasksApi
+      .clockable(siteForTasks)
+      .then(setSiteTasks)
+      .catch(() => setSiteTasks([]));
+  }, [siteForTasks]);
+
+  const changeTask = async (id: string) => {
+    try {
+      const res = await tasksApi.setActiveTask(id || null);
+      setActiveRecord((prev: any) => (prev ? { ...prev, task_id: res.task_id, task_title: res.task_title } : prev));
+    } catch (error) {
+      Alert.alert('Error', apiError(error));
+    }
+  };
 
   useEffect(() => {
     loadData();
@@ -110,6 +136,7 @@ export default function ClockScreen() {
         selectedSite.id,
         { latitude: fix.latitude, longitude: fix.longitude },
         fix.accuracy,
+        taskId || null,
       );
 
       setActiveRecord(record);
@@ -162,6 +189,7 @@ export default function ClockScreen() {
 
   const selectSite = (site: Site) => {
     setSelectedSite(site);
+    setTaskId('');
     setShowSiteModal(false);
   };
 
@@ -185,6 +213,7 @@ export default function ClockScreen() {
             <Text style={styles.statusTime}>
               Since {format(new Date(activeRecord.clock_in), 'h:mm a')}
             </Text>
+            {activeRecord.task_title ? <Text style={styles.statusTime}>Working on: {activeRecord.task_title}</Text> : null}
           </View>
         ) : (
           <View style={[styles.statusCard, styles.inactiveStatus]}>
@@ -223,6 +252,27 @@ export default function ClockScreen() {
             )}
           </View>
         )}
+
+        {/* Task picker */}
+        {siteTasks.length > 0 && (
+          <View style={styles.sectionCard}>
+            <Text style={styles.sectionTitle}>{activeRecord ? 'Change what you are working on' : 'What are you working on?'}</Text>
+            <Chips
+              options={[{ value: '', label: 'Not sure / general' }, ...siteTasks.map((t) => ({ value: t.id, label: t.title }))]}
+              value={activeRecord ? activeRecord.task_id || '' : taskId}
+              onChange={(v: string) => (activeRecord ? changeTask(v) : setTaskId(v))}
+            />
+          </View>
+        )}
+
+        {selectedSite?.status === 'shutdown' && !activeRecord ? (
+          <View style={[styles.locationCard, { backgroundColor: '#FDECEC' }]}>
+            <MaterialIcons name="block" size={24} color={COLORS.error} />
+            <Text style={[styles.locationText, { color: COLORS.error }]}>
+              {selectedSite.name} is shut down{selectedSite.shutdown_reason ? `: ${selectedSite.shutdown_reason}` : ''}
+            </Text>
+          </View>
+        ) : null}
 
         {/* Location Status */}
         <View style={styles.locationCard}>

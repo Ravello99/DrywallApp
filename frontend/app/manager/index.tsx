@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -14,10 +14,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAuthStore } from '../../src/store/authStore';
 import { reportService } from '../../src/services/reportService';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { COLORS } from '../../src/constants/colors';
 import { authService } from '../../src/services/authService';
 import Footer from '../../src/components/Footer';
+import SiteGlanceCard from '../../src/components/SiteGlanceCard';
+import { projectsApi, notificationsApi, drawApi } from '../../src/services/pmService';
+import { SiteCard } from '../../src/types/features';
+import { roleLabel, canSeePayRates } from '../../src/constants/roles';
+import { money } from '../../src/components/ui';
 
 export default function ManagerDashboard() {
   const { user, logout } = useAuthStore();
@@ -25,15 +30,29 @@ export default function ManagerDashboard() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [stats, setStats] = useState<any>({});
+  const [sites, setSites] = useState<SiteCard[]>([]);
+  const [unread, setUnread] = useState(0);
+  const [ar, setAr] = useState<any>(null);
+  const seesMoney = canSeePayRates(user?.role);
 
-  useEffect(() => {
-    loadStats();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      loadStats();
+    }, []),
+  );
 
   const loadStats = async () => {
     try {
-      const data = await reportService.getDashboardStats();
+      const [data, overview, notes, receivables] = await Promise.all([
+        reportService.getDashboardStats(),
+        projectsApi.overview().catch(() => []),
+        notificationsApi.list(true).catch(() => ({ unread: 0 })),
+        seesMoney ? drawApi.summary().catch(() => null) : Promise.resolve(null),
+      ]);
       setStats(data);
+      setSites(overview);
+      setUnread(notes.unread || 0);
+      setAr(receivables);
     } catch (error) {
       console.error('Error loading stats:', error);
     } finally {
@@ -99,12 +118,22 @@ export default function ManagerDashboard() {
         {/* Welcome Section */}
         <View style={styles.header}>
           <View>
-            <Text style={styles.greeting}>Manager Dashboard</Text>
+            <Text style={styles.greeting}>{roleLabel(user?.role)} Dashboard</Text>
             <Text style={styles.userName}>{user?.name}</Text>
           </View>
-          <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
-            <MaterialIcons name="logout" size={24} color={COLORS.error} />
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <TouchableOpacity style={styles.signOutButton} onPress={() => router.push('/manager/notifications' as any)}>
+              <MaterialIcons name={unread ? 'notifications-active' : 'notifications-none'} size={24} color={COLORS.primary} />
+              {unread ? (
+                <View style={styles.bellBadge}>
+                  <Text style={styles.bellBadgeText}>{unread > 99 ? '99+' : unread}</Text>
+                </View>
+              ) : null}
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
+              <MaterialIcons name="logout" size={24} color={COLORS.error} />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Stats Grid */}
@@ -142,7 +171,7 @@ export default function ManagerDashboard() {
                 <View style={styles.alertHeader}>
                   <MaterialIcons name="error" size={24} color={COLORS.error} />
                   <View style={styles.alertTextContainer}>
-                    <Text style={styles.alertTitle}>Critical - Expiring in 30 Days</Text>
+                    <Text style={styles.alertTitle}>Critical - expired or within 7 days</Text>
                     <Text style={styles.alertText}>
                       {stats.critical_expiring_safety_documents} safety document(s) expired or expiring within 7 days
                     </Text>
@@ -156,7 +185,7 @@ export default function ManagerDashboard() {
                 <View style={styles.alertHeader}>
                   <MaterialIcons name="warning" size={24} color={COLORS.warning} />
                   <View style={styles.alertTextContainer}>
-                    <Text style={styles.alertTitle}>Warning - Expiring in 60 Days</Text>
+                    <Text style={styles.alertTitle}>Warning - expiring within 14 days</Text>
                     <Text style={styles.alertText}>
                       {stats.expiring_safety_documents} safety document(s) expiring within 14 days
                     </Text>
@@ -166,6 +195,72 @@ export default function ManagerDashboard() {
             )}
           </View>
         )}
+
+        {/* Shut-down sites and flagged clock-ins */}
+        {stats.shutdown_sites > 0 || stats.flagged_clock_records > 0 ? (
+          <View style={styles.alertSection}>
+            {stats.shutdown_sites > 0 ? (
+              <TouchableOpacity style={[styles.alertCard, styles.criticalAlert]} onPress={() => router.push('/manager/projects' as any)}>
+                <View style={styles.alertHeader}>
+                  <MaterialIcons name="block" size={24} color={COLORS.error} />
+                  <View style={styles.alertTextContainer}>
+                    <Text style={styles.alertTitle}>{stats.shutdown_sites} site(s) shut down</Text>
+                    <Text style={styles.alertText}>Nobody can clock in there until reopened.</Text>
+                  </View>
+                </View>
+              </TouchableOpacity>
+            ) : null}
+            {stats.flagged_clock_records > 0 ? (
+              <TouchableOpacity style={[styles.alertCard, styles.warningAlert]} onPress={() => router.push('/manager/approvals' as any)}>
+                <View style={styles.alertHeader}>
+                  <MaterialIcons name="gps-off" size={24} color={COLORS.warning} />
+                  <View style={styles.alertTextContainer}>
+                    <Text style={styles.alertTitle}>{stats.flagged_clock_records} flagged clock-in(s)</Text>
+                    <Text style={styles.alertText}>Couldn't be GPS-checked. Tap to review.</Text>
+                  </View>
+                </View>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        ) : null}
+
+        {/* Receivables */}
+        {ar ? (
+          <View style={styles.section}>
+            <View style={styles.activityCard}>
+              <View style={styles.activityHeader}>
+                <MaterialIcons name="account-balance" size={24} color={COLORS.primary} />
+                <Text style={styles.activityTitle}>Progress Draws</Text>
+              </View>
+              <View style={styles.activityRow}>
+                <Text style={styles.activityLabel}>Outstanding</Text>
+                <Text style={styles.activityValue}>{money(ar.outstanding)}</Text>
+              </View>
+              <View style={styles.activityRow}>
+                <Text style={styles.activityLabel}>Over 60 days</Text>
+                <Text style={[styles.activityValue, (ar.aging['61-90'] + ar.aging['90+']) > 0 ? { color: COLORS.error } : null]}>
+                  {money(ar.aging['61-90'] + ar.aging['90+'])}
+                </Text>
+              </View>
+              <View style={styles.activityRow}>
+                <Text style={styles.activityLabel}>Holdback held</Text>
+                <Text style={styles.activityValue}>{money(ar.holdback_held)}</Text>
+              </View>
+            </View>
+          </View>
+        ) : null}
+
+        {/* Job sites at a glance */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Job Sites at a Glance</Text>
+          {sites.length === 0 ? (
+            <Text style={styles.activityLabel}>No active sites yet.</Text>
+          ) : (
+            sites.map((site) => (
+              <SiteGlanceCard key={site.id} site={site} onPress={() => router.push(`/manager/project/${site.id}` as any)} />
+            ))
+          )}
+        </View>
 
         {/* Today's Activity */}
         <View style={styles.section}>
@@ -270,6 +365,23 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: COLORS.textPrimary,
     marginTop: 4,
+  },
+  bellBadge: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    backgroundColor: COLORS.error,
+    borderRadius: 8,
+    minWidth: 16,
+    height: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+  },
+  bellBadgeText: {
+    color: COLORS.white,
+    fontSize: 10,
+    fontWeight: '700',
   },
   signOutButton: {
     width: 48,

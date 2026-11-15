@@ -11,12 +11,13 @@ export const announcementService = {
     site_id: string;
     title: string;
     content: string;
+    announcement_type?: string;
   }) {
     const response = await api.post('/announcements', data);
     return response.data;
   },
 
-  async updateAnnouncement(id: string, data: { title?: string; content?: string }) {
+  async updateAnnouncement(id: string, data: { title?: string; content?: string; announcement_type?: string }) {
     const response = await api.put(`/announcements/${id}`, data);
     return response.data;
   },
