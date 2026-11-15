@@ -1,7 +1,9 @@
 import React, { useCallback, useState } from 'react';
 import { ScrollView, RefreshControl, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { TouchableOpacity } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 import { ProjectSummary } from '../../../src/types/features';
 import { projectsApi, apiError } from '../../../src/services/pmService';
 import { useAuthStore } from '../../../src/store/authStore';
@@ -20,6 +22,7 @@ const can = (role: string | undefined, roles: string[]) => !!role && roles.inclu
 
 export default function ProjectDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
   const { user } = useAuthStore();
   const role = user?.role;
   const [summary, setSummary] = useState<ProjectSummary | null>(null);
@@ -70,7 +73,19 @@ export default function ProjectDetail() {
 
   return (
     <SafeAreaView style={ui.screen} edges={['bottom']}>
-      <Stack.Screen options={{ title: summary.name }} />
+      <Stack.Screen
+        options={{
+          title: summary.name,
+          headerLeft: () => (
+            <TouchableOpacity
+              onPress={() => (router.canGoBack() ? router.back() : router.replace('/manager/projects' as any))}
+              style={{ marginLeft: 12 }}
+            >
+              <MaterialIcons name="arrow-back" size={24} color={COLORS.white} />
+            </TouchableOpacity>
+          ),
+        }}
+      />
       <Segments options={tabs} value={tab} onChange={setTab} />
       <ScrollView
         key={`${tab}-${version}`}
