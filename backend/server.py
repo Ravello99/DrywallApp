@@ -1,624 +1,10 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, File, UploadFile, Query
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from fastapi.responses import StreamingResponse
-from dotenv import load_dotenv
-from starlette.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
-from passlib.context import CryptContext
-from jose import JWTError, jwt
-from pydantic import BaseModel, Field, AfterValidator
-from typing_extensions import Annotated
-import re
-from typing import List, Optional, Dict, Any
-from datetime import datetime, timedelta
-from bson import ObjectId
-import os
-import logging
-from pathlib import Path
-import io
-from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill, Alignment
-import base64
+"""VanGuard Drywall & Acoustics API: app setup and the original (Oakdale-era) routes.
+Newer features live in features/*.py and are included at the bottom."""
+from core import *  # noqa: F401,F403  (settings, db, roles, models, auth helpers)
+from core import _normalize_email  # noqa: F401
 
-
-ROOT_DIR = Path(__file__).parent
-load_dotenv(ROOT_DIR / '.env')
-
-# Security
-# SECRET_KEY must come from the environment (run.py generates one into backend/.env).
-# There is deliberately no hardcoded fallback: a known secret lets anyone forge login tokens.
-SECRET_KEY = os.environ.get("SECRET_KEY")
-if not SECRET_KEY:
-    raise RuntimeError(
-        "SECRET_KEY is not set. Start the app with run.py, or add SECRET_KEY to backend/.env"
-    )
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30 * 24 * 60  # 30 days
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-security = HTTPBearer()
-
-# MongoDB connection
-mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
-
-# Create the main app
 app = FastAPI(title="VanGuard Drywall & Acoustics API")
 api_router = APIRouter(prefix="/api")
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
-
-
-# ============ MODELS ============
-
-class PyObjectId(ObjectId):
-    @classmethod
-    def __get_validators__(cls):
-        yield cls.validate
-
-    @classmethod
-    def validate(cls, v):
-        if not ObjectId.is_valid(v):
-            raise ValueError("Invalid ObjectId")
-        return ObjectId(v)
-
-    @classmethod
-    def __get_pydantic_json_schema__(cls, field_schema):
-        field_schema.update(type="string")
-
-
-_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
-
-
-def _normalize_email(v: str) -> str:
-    # A simple format check. (Pydantic's EmailStr rejects reserved domains such as
-    # .local, which made the generated admin@drywall.local login impossible.)
-    v = (v or "").strip().lower()
-    if not _EMAIL_RE.match(v):
-        raise ValueError("Enter a valid email address")
-    return v
-
-
-Email = Annotated[str, AfterValidator(_normalize_email)]
-
-
-class LocationModel(BaseModel):
-    latitude: float
-    longitude: float
-
-
-# ---------- Roles ----------
-# Office roles use the management screens; field roles use the crew screens.
-ROLE_ADMIN = "admin"                     # owner / office admin: everything
-ROLE_COORDINATOR = "project_coordinator"  # bids, invoicing, job shutdown
-ROLE_ESTIMATOR = "estimator"             # bids and estimating
-ROLE_PM = "project_manager"              # projects, crews, materials, approvals
-ROLE_FOREMAN = "foreman"                 # runs a job site
-ROLE_EMPLOYEE = "employee"               # crew member
-
-ALL_ROLES = [ROLE_ADMIN, ROLE_COORDINATOR, ROLE_ESTIMATOR, ROLE_PM, ROLE_FOREMAN, ROLE_EMPLOYEE]
-OFFICE_ROLES = {ROLE_ADMIN, ROLE_COORDINATOR, ROLE_ESTIMATOR, ROLE_PM}
-FIELD_ROLES = {ROLE_FOREMAN, ROLE_EMPLOYEE}
-PAY_RATE_VIEWERS = {ROLE_ADMIN, ROLE_PM, ROLE_COORDINATOR}   # who may see/edit pay rates
-SHUTDOWN_ROLES = {ROLE_ADMIN, ROLE_COORDINATOR, ROLE_PM}     # who may shut a job site down
-
-# Roles from the Oakdale app, mapped on startup. Old crew levels become the "level" field.
-LEGACY_ROLES = {"manager": (ROLE_ADMIN, None), "apprentice": (ROLE_EMPLOYEE, "apprentice"),
-                "journeyman": (ROLE_EMPLOYEE, "journeyman"), "lead_hand": (ROLE_EMPLOYEE, "lead_hand")}
-
-SPECIALTIES = ["steel_framer", "drywaller", "taper_finisher", "insulator", "acoustic_ceilings",
-               "labourer", "general"]
-LEVELS = ["apprentice", "journeyman", "lead_hand"]
-
-
-class UserBase(BaseModel):
-    email: Email
-    name: str
-    role: str = Field(default=ROLE_EMPLOYEE)
-
-
-class UserProfileFields(BaseModel):
-    phone: Optional[str] = None
-    emergency_contact_name: Optional[str] = None
-    emergency_contact_phone: Optional[str] = None
-    specialties: Optional[List[str]] = None
-    level: Optional[str] = None
-    hire_date: Optional[str] = None
-    pay_rate: Optional[float] = None          # hourly, dollars
-    active: Optional[bool] = None
-
-
-class UserCreate(UserBase, UserProfileFields):
-    password: str
-    assigned_sites: List[str] = Field(default_factory=list)
-
-
-class UserUpdate(UserProfileFields):
-    name: Optional[str] = None
-    email: Optional[Email] = None
-    assigned_sites: Optional[List[str]] = None
-    password: Optional[str] = None
-    role: Optional[str] = None
-
-
-class UserResponse(UserBase, UserProfileFields):
-    id: str
-    assigned_sites: List[str] = Field(default_factory=list)
-    created_at: datetime
-
-    class Config:
-        populate_by_name = True
-
-
-def user_out(u: dict, viewer: Optional[dict] = None) -> UserResponse:
-    """Build the API view of a user. Pay rate is only included for roles allowed to see it
-    (and for the person themselves)."""
-    can_see_pay = viewer is not None and (
-        viewer.get("role") in PAY_RATE_VIEWERS or str(viewer.get("_id")) == str(u.get("_id")))
-    return UserResponse(
-        id=str(u["_id"]),
-        email=u["email"],
-        name=u["name"],
-        role=u.get("role", ROLE_EMPLOYEE),
-        assigned_sites=u.get("assigned_sites", []),
-        created_at=u["created_at"],
-        phone=u.get("phone"),
-        emergency_contact_name=u.get("emergency_contact_name"),
-        emergency_contact_phone=u.get("emergency_contact_phone"),
-        specialties=u.get("specialties") or [],
-        level=u.get("level"),
-        hire_date=u.get("hire_date"),
-        pay_rate=u.get("pay_rate") if can_see_pay else None,
-        active=u.get("active", True),
-    )
-
-
-def validate_user_fields(data: dict, viewer: dict) -> dict:
-    if "role" in data and data["role"] not in ALL_ROLES:
-        raise HTTPException(status_code=400, detail="Unknown role: %s" % data["role"])
-    if data.get("role") == ROLE_ADMIN and viewer.get("role") != ROLE_ADMIN:
-        raise HTTPException(status_code=403, detail="Only an admin can create or promote admins")
-    if "specialties" in data and data["specialties"] is not None:
-        bad = [x for x in data["specialties"] if x not in SPECIALTIES]
-        if bad:
-            raise HTTPException(status_code=400, detail="Unknown specialty: %s" % ", ".join(bad))
-    if data.get("level") and data["level"] not in LEVELS:
-        raise HTTPException(status_code=400, detail="Unknown level: %s" % data["level"])
-    if "pay_rate" in data and data["pay_rate"] is not None:
-        if viewer.get("role") not in PAY_RATE_VIEWERS:
-            raise HTTPException(status_code=403, detail="You can't set pay rates")
-        if data["pay_rate"] < 0:
-            raise HTTPException(status_code=400, detail="Pay rate can't be negative")
-    if "email" in data and data["email"]:
-        data["email"] = str(data["email"]).lower()
-    return data
-
-
-class LoginRequest(BaseModel):
-    email: str          # not format-checked: a wrong email just fails the lookup
-    password: str
-
-
-class Token(BaseModel):
-    access_token: str
-    token_type: str
-    user: UserResponse
-
-
-SITE_STATUSES = ["active", "shutdown", "completed"]
-JOB_TYPES = ["multi_family", "commercial_fit_out", "institutional", "other"]
-DEFAULT_GEOFENCE_M = 200
-
-
-class SiteCreate(BaseModel):
-    name: str
-    address: str
-    location: Optional[LocationModel] = None
-    geofence_radius_m: int = Field(default=DEFAULT_GEOFENCE_M, ge=25, le=5000)
-    status: str = Field(default="active")
-    project_number: Optional[str] = None
-    general_contractor: Optional[str] = None
-    job_type: Optional[str] = None
-    contract_value: Optional[float] = None
-    start_date: Optional[str] = None
-    end_date: Optional[str] = None
-
-
-class SiteUpdate(BaseModel):
-    name: Optional[str] = None
-    address: Optional[str] = None
-    location: Optional[LocationModel] = None
-    geofence_radius_m: Optional[int] = Field(default=None, ge=25, le=5000)
-    status: Optional[str] = None
-    project_number: Optional[str] = None
-    general_contractor: Optional[str] = None
-    job_type: Optional[str] = None
-    contract_value: Optional[float] = None
-    start_date: Optional[str] = None
-    end_date: Optional[str] = None
-
-
-class SiteResponse(SiteCreate):
-    id: str
-    created_at: datetime
-    shutdown_reason: Optional[str] = None
-    shutdown_at: Optional[datetime] = None
-    shutdown_by_name: Optional[str] = None
-    workers_on_site: int = 0
-
-
-class ShutdownRequest(BaseModel):
-    reason: str = Field(min_length=3, max_length=500)
-    clock_out_everyone: bool = True
-
-
-class ClockInRequest(BaseModel):
-    site_id: str
-    location: LocationModel
-    accuracy_m: Optional[float] = None   # GPS accuracy reported by the phone
-
-
-class ClockOutRequest(BaseModel):
-    location: LocationModel
-    accuracy_m: Optional[float] = None
-
-
-class ClockRecordResponse(BaseModel):
-    id: str
-    user_id: str
-    user_name: str
-    site_id: str
-    site_name: str
-    clock_in: datetime
-    clock_in_location: LocationModel
-    clock_out: Optional[datetime] = None
-    clock_out_location: Optional[LocationModel] = None
-    total_hours: Optional[float] = None
-    status: str
-    synced: bool = Field(default=True)
-    clock_in_distance_m: Optional[float] = None
-    clock_out_distance_m: Optional[float] = None
-    flagged: bool = False
-    flag_reason: Optional[str] = None
-    auto_clock_out_reason: Optional[str] = None
-
-
-class SafetyDocumentCreate(BaseModel):
-    site_id: str
-    document_type: str  # "photo" or "pdf"
-    file_data: str  # base64 encoded
-    file_name: str
-    description: Optional[str] = None
-    expiry_date: Optional[str] = None  # ISO format date string
-
-
-class SafetyDocumentResponse(BaseModel):
-    id: str
-    user_id: str
-    user_name: str
-    site_id: str
-    site_name: str
-    document_type: str
-    file_data: str
-    file_name: str
-    description: Optional[str] = None
-    expiry_date: Optional[str] = None
-    is_expiring_soon: bool = False
-    is_expiring_critical: bool = False
-    days_until_expiry: Optional[int] = None
-    created_at: datetime
-
-
-class AnnouncementType(str):
-    SITE_INSTRUCTION = "site_instruction"
-    HAZARD = "hazard"
-    GENERAL = "general"
-
-
-class AnnouncementCreate(BaseModel):
-    site_id: str
-    title: str
-    content: str
-    announcement_type: str = Field(default="general")
-
-
-class AnnouncementUpdate(BaseModel):
-    title: Optional[str] = None
-    content: Optional[str] = None
-    announcement_type: Optional[str] = None
-
-
-class AnnouncementResponse(BaseModel):
-    id: str
-    site_id: str
-    site_name: str
-    title: str
-    content: str
-    announcement_type: str
-    created_by: str
-    created_by_name: str
-    created_at: datetime
-    updated_at: Optional[datetime] = None
-
-
-class FileShareCategory(str):
-    DRAWINGS = "drawings"
-    SHOP_DRAWINGS = "shop_drawings"
-    SITE_PLANS = "site_plans"
-    SAFETY_DOCUMENTS = "safety_documents"
-    OTHER = "other"
-
-
-class SharedFileCreate(BaseModel):
-    site_id: str
-    category: str
-    file_name: str
-    file_data: str  # base64 encoded
-    description: Optional[str] = None
-
-
-class SharedFileResponse(BaseModel):
-    id: str
-    site_id: str
-    site_name: str
-    category: str
-    file_name: str
-    file_data: str
-    description: Optional[str] = None
-    uploaded_by: str
-    uploaded_by_name: str
-    created_at: datetime
-
-
-class SyncDataRequest(BaseModel):
-    clock_records: Optional[List[Dict[str, Any]]] = Field(default_factory=list)
-    safety_documents: Optional[List[Dict[str, Any]]] = Field(default_factory=list)
-    last_sync: Optional[str] = None
-
-
-class SyncDataResponse(BaseModel):
-    success: bool
-    synced_clock_records: int
-    synced_safety_documents: int
-    new_data: Dict[str, Any]
-
-
-# ============ TASK MODELS ============
-
-class TaskPriority(str):
-    HIGH = "high"
-    MEDIUM = "medium"
-    LOW = "low"
-
-
-class TaskType(str):
-    SAFETY = "safety"
-    INSTALLATION = "installation"
-    INSPECTION = "inspection"
-
-
-class TaskStatus(str):
-    TODO = "todo"
-    IN_PROGRESS = "in_progress"
-    COMPLETE = "complete"
-
-
-class TaskCreate(BaseModel):
-    title: str
-    description: Optional[str] = None
-    site_id: str
-    assigned_to: str  # user_id
-    priority: str = Field(default="medium")
-    task_type: str = Field(default="safety")
-    due_date: Optional[str] = None
-
-
-class TaskUpdate(BaseModel):
-    title: Optional[str] = None
-    description: Optional[str] = None
-    priority: Optional[str] = None
-    task_type: Optional[str] = None
-    status: Optional[str] = None
-    due_date: Optional[str] = None
-
-
-class TaskResponse(BaseModel):
-    id: str
-    title: str
-    description: Optional[str] = None
-    site_id: str
-    site_name: str
-    assigned_to: str
-    assigned_to_name: str
-    priority: str
-    task_type: str
-    status: str
-    due_date: Optional[str] = None
-    created_by: str
-    created_by_name: str
-    created_at: datetime
-    updated_at: Optional[datetime] = None
-
-
-# ============ CUSTOM FORM MODELS ============
-
-class FormFieldType(str):
-    TEXT = "text"
-    YESNO = "yesno"
-    MULTIPLE_CHOICE = "multiple_choice"
-    DATE = "date"
-    PHOTO = "photo"
-    SIGNATURE = "signature"
-
-
-class FormField(BaseModel):
-    field_id: str
-    field_type: str
-    label: str
-    required: bool = False
-    options: Optional[List[str]] = None  # For multiple choice
-
-
-class FormTemplateCreate(BaseModel):
-    title: str
-    description: Optional[str] = None
-    fields: List[FormField]
-    site_id: Optional[str] = None  # Optional: can be site-specific or general
-
-
-class FormTemplateResponse(BaseModel):
-    id: str
-    title: str
-    description: Optional[str] = None
-    fields: List[FormField]
-    site_id: Optional[str] = None
-    site_name: Optional[str] = None
-    created_by: str
-    created_by_name: str
-    created_at: datetime
-
-
-class FormAssignment(BaseModel):
-    form_id: str
-    assigned_to: List[str]  # List of user_ids
-    due_date: Optional[str] = None
-
-
-class FormResponse(BaseModel):
-    form_id: str
-    responses: Dict[str, Any]  # field_id -> response value
-
-
-class FormSubmissionResponse(BaseModel):
-    id: str
-    form_id: str
-    form_title: str
-    user_id: str
-    user_name: str
-    responses: Dict[str, Any]
-    submitted_at: datetime
-
-
-# ============ AUTHENTICATION HELPERS ============
-
-def verify_password(plain_password, hashed_password):
-    return pwd_context.verify(plain_password, hashed_password)
-
-
-def get_password_hash(password):
-    return pwd_context.hash(password)
-
-
-def create_access_token(data: dict):
-    to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-    return encoded_jwt
-
-
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    token = credentials.credentials
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        user_id: str = payload.get("sub")
-        if user_id is None:
-            raise HTTPException(status_code=401, detail="Invalid authentication credentials")
-    except JWTError:
-        raise HTTPException(status_code=401, detail="Invalid authentication credentials")
-    
-    user = await db.users.find_one({"_id": ObjectId(user_id)})
-    if user is None:
-        raise HTTPException(status_code=401, detail="User not found")
-    
-    return user
-
-
-def is_office(user: dict) -> bool:
-    return user.get("role") in OFFICE_ROLES
-
-
-async def get_current_office_user(current_user: dict = Depends(get_current_user)):
-    if not is_office(current_user):
-        raise HTTPException(status_code=403, detail="Not authorized. Office access required.")
-    return current_user
-
-
-# Older endpoints use this name; "manager" now means any office role.
-get_current_manager = get_current_office_user
-
-
-def require_roles(*roles: str):
-    allowed = set(roles)
-
-    async def checker(current_user: dict = Depends(get_current_user)):
-        if current_user.get("role") not in allowed:
-            raise HTTPException(status_code=403, detail="You don't have permission to do that.")
-        return current_user
-    return checker
-
-
-def can_access_site(user: dict, site_id: str) -> bool:
-    return is_office(user) or site_id in (user.get("assigned_sites") or [])
-
-
-def distance_m(a: dict, b: dict) -> float:
-    """Great-circle distance in metres between two {latitude, longitude} points."""
-    from math import radians, sin, cos, asin, sqrt
-    lat1, lon1, lat2, lon2 = map(radians, [a["latitude"], a["longitude"], b["latitude"], b["longitude"]])
-    h = sin((lat2 - lat1) / 2) ** 2 + cos(lat1) * cos(lat2) * sin((lon2 - lon1) / 2) ** 2
-    return 2 * 6371000 * asin(sqrt(h))
-
-
-def geofence_check(site: dict, location: dict, accuracy_m: Optional[float]):
-    """Returns (ok, distance_m, message). A site with no GPS location set can't be checked,
-    so clock-in is allowed but the record is flagged for the office."""
-    if not site.get("location"):
-        return True, None, "Site has no GPS location set"
-    d = distance_m(site["location"], location)
-    radius = site.get("geofence_radius_m") or DEFAULT_GEOFENCE_M
-    slack = min(max(accuracy_m or 0, 0), 50)   # forgive up to 50 m of GPS inaccuracy
-    if d > radius + slack:
-        return False, round(d), ("You're about %s from %s. You need to be within %d m of the site to clock in."
-                                 % (format_distance(d), site["name"], radius))
-    return True, round(d), None
-
-
-def format_distance(d: float) -> str:
-    return "%d m" % round(d) if d < 1000 else "%.1f km" % (d / 1000)
-
-
-def calculate_expiry_info(expiry_date_str: Optional[str]) -> tuple:
-    """Calculate if document is expiring soon and days until expiry"""
-    if not expiry_date_str:
-        return False, False, None
-    
-    try:
-        expiry_date = datetime.fromisoformat(expiry_date_str.replace('Z', '+00:00'))
-        today = datetime.now(expiry_date.tzinfo) if expiry_date.tzinfo else datetime.now()
-        days_until_expiry = (expiry_date - today).days
-        
-        # 14 days: employee gets a two-week notice. 7 days (or expired): foreman is warned.
-        is_expiring_critical = days_until_expiry <= 7
-        is_expiring_soon = 7 < days_until_expiry <= 14
-        
-        return is_expiring_soon, is_expiring_critical, days_until_expiry
-    except:
-        return False, False, None
-
-
-def serialize_doc(doc):
-    """Convert MongoDB document to JSON serializable format"""
-    if doc is None:
-        return None
-    doc["id"] = str(doc.pop("_id"))
-    return doc
 
 
 # ============ AUTH ROUTES ============
@@ -741,6 +127,8 @@ async def site_out(s_: dict) -> SiteResponse:
         general_contractor=s_.get("general_contractor"),
         job_type=s_.get("job_type"),
         contract_value=s_.get("contract_value"),
+        material_budget=s_.get("material_budget"),
+        labour_budget=s_.get("labour_budget"),
         start_date=s_.get("start_date"),
         end_date=s_.get("end_date"),
         created_at=s_["created_at"],
@@ -902,6 +290,12 @@ async def clock_in(clock_data: ClockInRequest, current_user: dict = Depends(get_
             "accuracy_m": clock_data.accuracy_m, "at": datetime.utcnow()})
         raise HTTPException(status_code=403, detail=problem)
 
+    task = None
+    if clock_data.task_id:
+        task = await db.tasks.find_one({"_id": oid(clock_data.task_id, "Task"), "site_id": clock_data.site_id})
+        if not task:
+            raise HTTPException(status_code=404, detail="That task isn't on this site")
+
     record = {
         "user_id": str(current_user["_id"]),
         "user_name": current_user["name"],
@@ -915,6 +309,9 @@ async def clock_in(clock_data: ClockInRequest, current_user: dict = Depends(get_
         "status": "clocked_in",
         "synced": True,
         "clock_in_distance_m": dist,
+        "pay_rate": current_user.get("pay_rate"),   # saved so job costs don't change after a raise
+        "task_id": str(task["_id"]) if task else None,
+        "task_title": task["title"] if task else None,
         "flagged": dist is None,
         "flag_reason": problem if dist is None else None,
     }
@@ -1277,6 +674,8 @@ async def delete_announcement(announcement_id: str, current_user: dict = Depends
 
 @api_router.post("/files/upload", response_model=SharedFileResponse)
 async def upload_shared_file(file_data: SharedFileCreate, current_user: dict = Depends(get_current_manager)):
+    if len(file_data.file_data) > 13_000_000:   # ~10 MB file once base64-decoded
+        raise HTTPException(status_code=413, detail="File is too large (10 MB max for now)")
     # Get site info
     site = await db.sites.find_one({"_id": ObjectId(file_data.site_id)})
     if not site:
@@ -1566,141 +965,6 @@ async def get_dashboard_stats(current_user: dict = Depends(get_current_manager))
     }
 
 
-# ============ TASK ROUTES ============
-
-@api_router.post("/tasks", response_model=TaskResponse)
-async def create_task(task_data: TaskCreate, current_user: dict = Depends(get_current_manager)):
-    # Get site and user info
-    site = await db.sites.find_one({"_id": ObjectId(task_data.site_id)})
-    if not site:
-        raise HTTPException(status_code=404, detail="Site not found")
-    
-    assigned_user = await db.users.find_one({"_id": ObjectId(task_data.assigned_to)})
-    if not assigned_user:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    task = {
-        "title": task_data.title,
-        "description": task_data.description,
-        "site_id": task_data.site_id,
-        "site_name": site["name"],
-        "assigned_to": task_data.assigned_to,
-        "assigned_to_name": assigned_user["name"],
-        "priority": task_data.priority,
-        "task_type": task_data.task_type,
-        "status": "todo",
-        "due_date": task_data.due_date,
-        "created_by": str(current_user["_id"]),
-        "created_by_name": current_user["name"],
-        "created_at": datetime.utcnow(),
-        "updated_at": None
-    }
-    
-    result = await db.tasks.insert_one(task)
-    task["id"] = str(result.inserted_id)
-    
-    return TaskResponse(**task)
-
-
-@api_router.get("/tasks/my-tasks", response_model=List[TaskResponse])
-async def get_my_tasks(current_user: dict = Depends(get_current_user)):
-    tasks = await db.tasks.find({
-        "assigned_to": str(current_user["_id"])
-    }).sort("created_at", -1).to_list(1000)
-    
-    return [TaskResponse(
-        id=str(t["_id"]),
-        title=t["title"],
-        description=t.get("description"),
-        site_id=t["site_id"],
-        site_name=t["site_name"],
-        assigned_to=t["assigned_to"],
-        assigned_to_name=t["assigned_to_name"],
-        priority=t["priority"],
-        task_type=t["task_type"],
-        status=t["status"],
-        due_date=t.get("due_date"),
-        created_by=t["created_by"],
-        created_by_name=t["created_by_name"],
-        created_at=t["created_at"],
-        updated_at=t.get("updated_at")
-    ) for t in tasks]
-
-
-@api_router.get("/tasks", response_model=List[TaskResponse])
-async def get_all_tasks(
-    site_id: Optional[str] = Query(None),
-    assigned_to: Optional[str] = Query(None),
-    current_user: dict = Depends(get_current_manager)
-):
-    query = {}
-    if site_id:
-        query["site_id"] = site_id
-    if assigned_to:
-        query["assigned_to"] = assigned_to
-    
-    tasks = await db.tasks.find(query).sort("created_at", -1).to_list(1000)
-    
-    return [TaskResponse(
-        id=str(t["_id"]),
-        title=t["title"],
-        description=t.get("description"),
-        site_id=t["site_id"],
-        site_name=t["site_name"],
-        assigned_to=t["assigned_to"],
-        assigned_to_name=t["assigned_to_name"],
-        priority=t["priority"],
-        task_type=t["task_type"],
-        status=t["status"],
-        due_date=t.get("due_date"),
-        created_by=t["created_by"],
-        created_by_name=t["created_by_name"],
-        created_at=t["created_at"],
-        updated_at=t.get("updated_at")
-    ) for t in tasks]
-
-
-@api_router.put("/tasks/{task_id}", response_model=TaskResponse)
-async def update_task(task_id: str, task_data: TaskUpdate, current_user: dict = Depends(get_current_user)):
-    update_dict = {k: v for k, v in task_data.model_dump().items() if v is not None}
-    update_dict["updated_at"] = datetime.utcnow()
-    
-    await db.tasks.update_one(
-        {"_id": ObjectId(task_id)},
-        {"$set": update_dict}
-    )
-    
-    updated_task = await db.tasks.find_one({"_id": ObjectId(task_id)})
-    if not updated_task:
-        raise HTTPException(status_code=404, detail="Task not found")
-    
-    return TaskResponse(
-        id=str(updated_task["_id"]),
-        title=updated_task["title"],
-        description=updated_task.get("description"),
-        site_id=updated_task["site_id"],
-        site_name=updated_task["site_name"],
-        assigned_to=updated_task["assigned_to"],
-        assigned_to_name=updated_task["assigned_to_name"],
-        priority=updated_task["priority"],
-        task_type=updated_task["task_type"],
-        status=updated_task["status"],
-        due_date=updated_task.get("due_date"),
-        created_by=updated_task["created_by"],
-        created_by_name=updated_task["created_by_name"],
-        created_at=updated_task["created_at"],
-        updated_at=updated_task.get("updated_at")
-    )
-
-
-@api_router.delete("/tasks/{task_id}")
-async def delete_task(task_id: str, current_user: dict = Depends(get_current_manager)):
-    result = await db.tasks.delete_one({"_id": ObjectId(task_id)})
-    if result.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Task not found")
-    return {"message": "Task deleted successfully"}
-
-
 # ============ CUSTOM FORM ROUTES ============
 
 @api_router.post("/forms/templates", response_model=FormTemplateResponse)
@@ -1761,18 +1025,28 @@ async def get_form_templates(
 
 
 @api_router.post("/forms/assign")
-async def assign_form(assignment: FormAssignment, current_user: dict = Depends(get_current_manager)):
-    # Create assignment records
+async def assign_form(assignment: FormAssignment, current_user: dict = Depends(require_roles(*OFFICE_ROLES, ROLE_FOREMAN))):
+    """Office can assign forms to anyone; a foreman can hand forms out to crew on their own sites."""
+    form = await db.form_templates.find_one({"_id": oid(assignment.form_id, "Form")})
+    if not form:
+        raise HTTPException(status_code=404, detail="Form not found")
+    if is_foreman(current_user):
+        my_sites = set(current_user.get("assigned_sites") or [])
+        for user_id in assignment.assigned_to:
+            target = await db.users.find_one({"_id": oid(user_id, "User")})
+            if not target or not my_sites.intersection(target.get("assigned_sites") or []):
+                raise HTTPException(status_code=403, detail="You can only assign forms to crew on your sites")
     for user_id in assignment.assigned_to:
-        assignment_record = {
+        await db.form_assignments.insert_one({
             "form_id": assignment.form_id,
             "user_id": user_id,
             "due_date": assignment.due_date,
             "status": "pending",
-            "assigned_at": datetime.utcnow()
-        }
-        await db.form_assignments.insert_one(assignment_record)
-    
+            "assigned_at": datetime.utcnow(),
+            "assigned_by": str(current_user["_id"]),
+            "assigned_by_name": current_user["name"],
+        })
+    await notify(assignment.assigned_to, "New form to fill out", form["title"], kind="form", link="/worker/forms")
     return {"message": f"Form assigned to {len(assignment.assigned_to)} user(s)"}
 
 
@@ -1875,6 +1149,19 @@ async def startup_event():
     await db.users.create_index("email", unique=True)
     await db.clock_records.create_index([("user_id", 1), ("status", 1)])
     await db.clock_records.create_index([("site_id", 1), ("status", 1)])
+    await db.clock_records.create_index("task_id")
+    await db.tasks.create_index([("site_id", 1), ("status", 1)])
+    await db.tasks.create_index("assigned_to")
+    await db.notifications.create_index([("user_id", 1), ("read", 1), ("created_at", -1)])
+    await db.notifications.create_index([("user_id", 1), ("dedupe_key", 1)])
+    await db.crew_assignments.create_index([("user_id", 1), ("site_id", 1)])
+    for coll in ("material_requests", "manpower_requests", "rfis", "change_orders", "invoices"):
+        await db[coll].create_index([("site_id", 1), ("status", 1)])
+    await db.bids.create_index([("status", 1), ("due_date", 1)])
+    await db.bids.create_index("email_message_id", sparse=True)
+
+    from features.notifications import start_background_jobs
+    start_background_jobs()
 
     if await db.users.find_one({"role": ROLE_ADMIN}):
         return
@@ -1897,8 +1184,14 @@ async def startup_event():
     logger.info("Created first manager account for %s", admin_email)
 
 
-# Include router
+# Include routers. Feature routers must come before the web-app catch-all below.
 app.include_router(api_router)
+
+from features import (bids, change_orders, field, invoices, manpower, materials,  # noqa: E402
+                      notifications, projects, rfis, tasks)
+
+for _module in (tasks, projects, materials, manpower, rfis, change_orders, invoices, bids, notifications, field):
+    app.include_router(_module.router)
 
 
 # Serve the built web app (frontend/dist, made by `expo export --platform web`) on the
@@ -1935,4 +1228,6 @@ app.add_middleware(
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
+    from features.notifications import stop_background_jobs
+    stop_background_jobs()
     client.close()
