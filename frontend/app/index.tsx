@@ -1,3 +1,4 @@
+import '../src/utils/webAlert'; // browser-friendly Alert.alert (must load first)
 import React, { useEffect, useState } from 'react';
 import {
   View,
@@ -23,6 +24,7 @@ import { isOfficeRole } from '../src/constants/roles';
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
   const [loading, setLoading] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
   const router = useRouter();
@@ -60,8 +62,9 @@ export default function LoginScreen() {
     }
 
     setLoading(true);
+    setLoginError('');
     try {
-      const { user } = await authService.login(email, password);
+      const { user } = await authService.login(email.trim(), password);
       setUser(user);
       
       // Navigate based on role
@@ -71,7 +74,14 @@ export default function LoginScreen() {
         router.replace('/worker');
       }
     } catch (error: any) {
-      Alert.alert('Login Failed', error.response?.data?.detail || 'Invalid credentials');
+      const detail = error.response?.data?.detail;
+      const msg = !error.response
+        ? "Can't reach the server. Check your connection and the server address."
+        : typeof detail === 'string'
+          ? detail
+          : 'Invalid email or password';
+      setLoginError(msg);
+      Alert.alert('Login Failed', msg);
     } finally {
       setLoading(false);
     }
@@ -129,6 +139,8 @@ export default function LoginScreen() {
                 placeholderTextColor={COLORS.gray400}
               />
             </View>
+
+            {loginError ? <Text style={styles.errorText}>{loginError}</Text> : null}
 
             <TouchableOpacity
               style={[styles.button, loading && styles.buttonDisabled]}
@@ -221,6 +233,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 8,
+  },
+  errorText: {
+    color: COLORS.error,
+    fontSize: 14,
+    marginBottom: 8,
+    textAlign: 'center',
   },
   buttonDisabled: {
     opacity: 0.6,

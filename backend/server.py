@@ -6,7 +6,9 @@ from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from passlib.context import CryptContext
 from jose import JWTError, jwt
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, Field, AfterValidator
+from typing_extensions import Annotated
+import re
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
 from bson import ObjectId
@@ -71,6 +73,21 @@ class PyObjectId(ObjectId):
         field_schema.update(type="string")
 
 
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def _normalize_email(v: str) -> str:
+    # A simple format check. (Pydantic's EmailStr rejects reserved domains such as
+    # .local, which made the generated admin@drywall.local login impossible.)
+    v = (v or "").strip().lower()
+    if not _EMAIL_RE.match(v):
+        raise ValueError("Enter a valid email address")
+    return v
+
+
+Email = Annotated[str, AfterValidator(_normalize_email)]
+
+
 class LocationModel(BaseModel):
     latitude: float
     longitude: float
@@ -101,7 +118,7 @@ LEVELS = ["apprentice", "journeyman", "lead_hand"]
 
 
 class UserBase(BaseModel):
-    email: EmailStr
+    email: Email
     name: str
     role: str = Field(default=ROLE_EMPLOYEE)
 
@@ -124,7 +141,7 @@ class UserCreate(UserBase, UserProfileFields):
 
 class UserUpdate(UserProfileFields):
     name: Optional[str] = None
-    email: Optional[EmailStr] = None
+    email: Optional[Email] = None
     assigned_sites: Optional[List[str]] = None
     password: Optional[str] = None
     role: Optional[str] = None
@@ -184,7 +201,7 @@ def validate_user_fields(data: dict, viewer: dict) -> dict:
 
 
 class LoginRequest(BaseModel):
-    email: EmailStr
+    email: str          # not format-checked: a wrong email just fails the lookup
     password: str
 
 
@@ -630,7 +647,7 @@ async def health_check():
 
 @api_router.post("/auth/login", response_model=Token)
 async def login(login_data: LoginRequest):
-    user = await db.users.find_one({"email": login_data.email.lower()})
+    user = await db.users.find_one({"email": login_data.email.strip().lower()})
     if not user or not verify_password(login_data.password, user["password"]):
         raise HTTPException(status_code=401, detail="Incorrect email or password")
     if user.get("active") is False:
