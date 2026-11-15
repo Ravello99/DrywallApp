@@ -1,0 +1,41 @@
+# Secrets and local config (run.py generates these)
+.env
+.env.*
+!.env.example
+LOGIN_DETAILS.txt
+
+# Tools and data downloaded/created by run.py
+.tools/
+.data/
+.logs/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Node / Expo / Metro
+node_modules/
+.expo/
+.metro-cache/
+.metro-health-check*
+dist/
+web-build/
+*.tsbuildinfo
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store
+
+# Archives and keys
+*.zip
+*.tar.gz
+*.tgz
+*.pem
+*.key
+*.p8
+*.p12
+*.jks
+*.mobileprovision

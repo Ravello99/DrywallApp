@@ -1,0 +1,77 @@
+{
+  "expo": {
+    "name": "Oakdale Construction Management",
+    "slug": "Oakdale-Construction-Management",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "constructionmanager",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.constructionmanager.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "This app needs access to your camera to take photos of safety documentation.",
+        "NSPhotoLibraryUsageDescription": "This app needs access to your photo library to upload safety documentation.",
+        "NSLocationWhenInUseUsageDescription": "This app needs your location to record clock in/out times at construction sites."
+      }
+    },
+    "android": {
+      "package": "com.constructionmanager.app",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#FF6B35"
+      },
+      "edgeToEdgeEnabled": true,
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ]
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow Construction Manager to use your location for clock in/out."
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Construction Manager to access your camera for safety documentation."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Construction Manager to access your photos for safety documentation."
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash-image.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#FF6B35"
+        }
+      ],
+      "@react-native-community/datetimepicker",
+      "expo-font",
+      "expo-web-browser"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
