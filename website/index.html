@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>VanGuard Drywall &amp; Acoustics | Steel framing, drywall and acoustic ceilings in Niagara and the GTA</title>
+  <meta name="description" content="VanGuard Drywall & Acoustics builds steel stud framing, drywall, taping, insulation and acoustic ceilings for multi-family, commercial fit-out and institutional projects. Based in St. Catharines, Ontario." />
+  <link rel="icon" type="image/png" href="assets/favicon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --navy: #0B2556;
+      --navy-deep: #061838;
+      --gold: #B4973A;
+      --gold-soft: #E9DDB4;
+      --slate: #5B6E7C;
+      --charcoal: #202732;
+      --gypsum: #F3F4F2;
+      --compound: #E3E6E2;
+      --white: #FFFFFF;
+      --wide: 125%;
+      --measure: 66ch;
+      --radius: 4px;
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      font-family: "Archivo", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      font-size: 1.0625rem;
+      line-height: 1.6;
+      color: var(--charcoal);
+      background: var(--gypsum);
+      -webkit-font-smoothing: antialiased;
+    }
+    img { max-width: 100%; display: block; }
+    a { color: var(--navy); }
+    a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+      outline: 3px solid var(--gold);
+      outline-offset: 3px;
+    }
+    .wrap { width: min(1160px, 100% - 2.5rem); margin-inline: auto; }
+    .skip { position: absolute; left: -999px; top: 0; background: var(--gold); color: var(--navy-deep); padding: .6rem 1rem; z-index: 50; }
+    .skip:focus { left: 1rem; top: 1rem; }
+
+    /* ---------- type scale (1.25 ratio) ---------- */
+    h1, h2, h3 { font-stretch: var(--wide); line-height: 1.08; margin: 0; letter-spacing: -0.01em; color: var(--navy); }
+    h1 { font-size: clamp(2.3rem, 5.4vw, 4.1rem); font-weight: 800; }
+    h2 { font-size: clamp(1.75rem, 3.4vw, 2.6rem); font-weight: 750; }
+    h3 { font-size: 1.2rem; font-weight: 700; line-height: 1.25; }
+    p { margin: 0 0 1rem; max-width: var(--measure); }
+    .lede { font-size: 1.2rem; color: var(--slate); }
+
+    /* ---------- buttons ---------- */
+    .btn {
+      display: inline-flex; align-items: center; gap: .5rem;
+      font: inherit; font-weight: 700; font-size: 1rem; text-decoration: none;
+      padding: .85rem 1.35rem; border-radius: var(--radius); border: 2px solid transparent; cursor: pointer;
+      transition: background-color .15s ease, color .15s ease, border-color .15s ease;
+    }
+    .btn-gold { background: var(--gold); color: var(--navy-deep); }
+    .btn-gold:hover { background: #C9AC4D; }
+    .btn-navy { background: var(--navy); color: var(--white); }
+    .btn-navy:hover { background: var(--navy-deep); }
+    .btn-line { border-color: currentColor; color: var(--navy); background: transparent; }
+    .btn-line:hover { background: var(--navy); color: var(--white); border-color: var(--navy); }
+
+    /* ---------- header ---------- */
+    .site-header { background: var(--white); border-bottom: 1px solid var(--compound); position: sticky; top: 0; z-index: 20; }
+    .site-header .wrap { display: flex; align-items: center; justify-content: space-between; gap: 1rem; min-height: 76px; }
+    .brand img { height: 44px; width: auto; }
+    .nav { display: flex; align-items: center; gap: 1.6rem; }
+    .nav a.link { text-decoration: none; color: var(--charcoal); font-weight: 600; font-size: .98rem; }
+    .nav a.link:hover { color: var(--navy); text-decoration: underline; text-decoration-color: var(--gold); text-underline-offset: 6px; text-decoration-thickness: 2px; }
+    .nav .btn { padding: .6rem 1rem; }
+    .menu-toggle { display: none; background: none; border: 2px solid var(--navy); border-radius: var(--radius); padding: .45rem .7rem; font: inherit; font-weight: 700; color: var(--navy); cursor: pointer; }
+
+    /* ---------- hero ---------- */
+    .hero { background: var(--white); border-bottom: 1px solid var(--compound); }
+    .hero .wrap { display: grid; grid-template-columns: 1.05fr 1fr; gap: 3rem; align-items: center; padding-block: 4.5rem 4rem; }
+    .hero h1 { margin-bottom: 1.25rem; max-width: 14ch; }
+    .hero .lede { margin-bottom: 2rem; max-width: 46ch; }
+    .hero-actions { display: flex; flex-wrap: wrap; gap: .8rem; }
+    .hero-place { margin-top: 1.75rem; color: var(--slate); font-size: .95rem; }
+    .wall { width: 100%; height: auto; }
+    .wall .stud, .wall .track { fill: none; stroke: var(--slate); stroke-width: 3; }
+    .wall .stud-web { fill: none; stroke: #9AA7B1; stroke-width: 1.5; }
+    .wall .board { fill: var(--gypsum); stroke: #C9CEC9; stroke-width: 1.5; }
+    .wall .screw { fill: var(--slate); }
+    .wall .joint { fill: none; stroke: var(--gold); stroke-width: 7; stroke-linecap: round; }
+    .wall .dim { stroke: var(--navy); stroke-width: 1.5; fill: none; }
+    .wall .dim-text { font: 600 15px "Archivo", system-ui, sans-serif; fill: var(--navy); }
+    .wall-caption { font-size: .9rem; color: var(--slate); margin-top: .6rem; }
+
+    /* the one animation: framing, then board, then tape */
+    @media (prefers-reduced-motion: no-preference) {
+      .wall .stud, .wall .track { stroke-dasharray: 520; stroke-dashoffset: 520; animation: draw .9s ease-out forwards; }
+      .wall .stud:nth-of-type(2) { animation-delay: .08s; } .wall .stud:nth-of-type(3) { animation-delay: .16s; }
+      .wall .stud:nth-of-type(4) { animation-delay: .24s; } .wall .stud:nth-of-type(5) { animation-delay: .32s; }
+      .wall .stud:nth-of-type(6) { animation-delay: .4s; }
+      .wall .sheet { opacity: 0; transform: translateY(-18px); animation: hang .55s cubic-bezier(.2,.8,.2,1) forwards; }
+      .wall .sheet-a { animation-delay: 1.0s; } .wall .sheet-b { animation-delay: 1.25s; }
+      .wall .joint { stroke-dasharray: 330; stroke-dashoffset: 330; animation: draw .6s ease-out 1.85s forwards; }
+    }
+    @keyframes draw { to { stroke-dashoffset: 0; } }
+    @keyframes hang { to { opacity: 1; transform: none; } }
+
+    /* ---------- sections ---------- */
+    .section { padding-block: 5rem; }
+    .section-head { margin-bottom: 2.5rem; }
+    .section-head p { margin-top: 1rem; color: var(--slate); }
+    .band-navy { background: var(--navy); color: #DCE3EE; }
+    .band-navy h2, .band-navy h3 { color: var(--white); }
+    .band-navy .section-head p { color: #B9C4D6; }
+    .band-white { background: var(--white); }
+
+    /* scopes: a wall section, one layer per scope */
+    .scopes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; border-top: 3px solid var(--navy); }
+    .scope { padding: 1.6rem 1.6rem 1.8rem 0; border-bottom: 1px solid var(--compound); }
+    .scope + .scope { padding-left: 1.6rem; border-left: 1px solid var(--compound); }
+    .scope:nth-child(3n+1) { padding-left: 0; border-left: none; }
+    .scope h3 { margin-bottom: .5rem; }
+    .scope p { font-size: .98rem; margin: 0; color: #3A4452; }
+    .scope .layer { display: block; width: 48px; height: 8px; margin-bottom: 1rem; border-radius: 1px; }
+
+    /* sectors */
+    .sectors { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2.5rem; }
+    .sector { border-top: 3px solid var(--gold); padding-top: 1.3rem; }
+    .sector h3 { margin-bottom: .6rem; }
+    .sector ul { margin: .8rem 0 0; padding-left: 1.1rem; color: #C5CFDD; }
+    .sector li { margin-bottom: .3rem; }
+    .sector p { color: #C5CFDD; }
+
+    /* process: a real sequence, so it's numbered */
+    .steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 2rem; counter-reset: step; }
+    .steps li { counter-increment: step; position: relative; padding-top: 3.4rem; }
+    .steps li::before {
+      content: counter(step); position: absolute; top: 0; left: 0;
+      font-stretch: var(--wide); font-weight: 800; font-size: 1.6rem; color: var(--navy);
+      width: 2.6rem; height: 2.6rem; display: grid; place-items: center; border: 2px solid var(--navy); border-radius: 50%;
+    }
+    .steps li:not(:last-child)::after { content: ""; position: absolute; top: 1.3rem; left: 3.2rem; right: -1.4rem; height: 2px; background: var(--compound); }
+    .steps h3 { margin-bottom: .5rem; }
+    .steps p { font-size: .98rem; color: #3A4452; }
+
+    /* field reporting */
+    .field { display: grid; grid-template-columns: 1fr 1.1fr; gap: 3.5rem; align-items: start; }
+    .field-list { display: grid; gap: 1.4rem; margin: 0; padding: 0; list-style: none; }
+    .field-list li { display: grid; grid-template-columns: 2.5rem 1fr; gap: 1rem; align-items: start; }
+    .field-list svg { width: 2.5rem; height: 2.5rem; color: var(--gold); }
+    .field-list h3 { margin-bottom: .25rem; font-size: 1.08rem; }
+    .field-list p { margin: 0; font-size: .98rem; color: #3A4452; }
+
+    /* past work */
+    .work { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; }
+    .job { background: var(--white); border: 1px solid var(--compound); border-radius: var(--radius); overflow: hidden; }
+    .job-art { aspect-ratio: 16 / 9; background: var(--navy); position: relative; }
+    .job-art svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+    .job-body { padding: 1.2rem 1.3rem 1.4rem; }
+    .job-body h3 { margin-bottom: .3rem; }
+    .job-body p { margin: 0; color: var(--slate); font-size: .96rem; }
+    .work-note { margin-top: 1.4rem; color: var(--slate); font-size: .95rem; }
+    .quote { margin: 3rem 0 0; padding: 1.6rem 1.8rem; background: var(--white); border-left: 5px solid var(--gold); max-width: 760px; }
+    .quote p { font-size: 1.25rem; font-stretch: 112%; font-weight: 600; color: var(--navy); margin: 0 0 .5rem; }
+    .quote footer { color: var(--slate); font-size: .95rem; }
+
+    /* careers */
+    .careers { display: grid; grid-template-columns: 1.3fr 1fr; gap: 3rem; align-items: center; }
+    .careers .trades { display: flex; flex-wrap: wrap; gap: .5rem; margin: 1.2rem 0 1.6rem; padding: 0; list-style: none; }
+    .careers .trades li { border: 1px solid #3B5180; color: var(--white); padding: .35rem .8rem; border-radius: 999px; font-size: .93rem; }
+    .login-card { background: var(--navy-deep); border: 1px solid #22396A; border-radius: var(--radius); padding: 1.8rem; }
+    .login-card h3 { margin-bottom: .5rem; }
+    .login-card p { color: #B9C4D6; font-size: .98rem; }
+
+    /* contact */
+    .contact { display: grid; grid-template-columns: .9fr 1.1fr; gap: 3.5rem; align-items: start; }
+    .contact dl { margin: 1.8rem 0 0; display: grid; grid-template-columns: auto 1fr; gap: .7rem 1.2rem; }
+    .contact dt { font-weight: 700; color: var(--navy); }
+    .contact dd { margin: 0; }
+    form.estimate { background: var(--white); border: 1px solid var(--compound); border-top: 4px solid var(--navy); border-radius: var(--radius); padding: 1.8rem; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    .field-row { display: flex; flex-direction: column; gap: .35rem; margin-bottom: 1rem; }
+    label { font-weight: 600; font-size: .94rem; color: var(--charcoal); }
+    label .opt { font-weight: 400; color: var(--slate); }
+    input, select, textarea {
+      font: inherit; font-size: 1rem; color: var(--charcoal); background: var(--gypsum);
+      border: 1px solid #C9CEC9; border-radius: var(--radius); padding: .7rem .8rem; width: 100%;
+    }
+    textarea { min-height: 7.5rem; resize: vertical; }
+    .hp { position: absolute; left: -5000px; width: 1px; height: 1px; overflow: hidden; }
+    .form-status { margin: 1rem 0 0; font-weight: 600; }
+    .form-status.ok { color: #2E6B3A; }
+    .form-status.err { color: #A42A2A; }
+
+    /* footer */
+    .site-footer { background: var(--charcoal); color: #B8BFC9; padding-block: 3rem 2rem; font-size: .95rem; }
+    .site-footer .wrap { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 2rem; }
+    .site-footer img { height: 40px; width: auto; background: var(--white); padding: 6px 10px; border-radius: var(--radius); }
+    .site-footer h3 { color: var(--white); font-size: 1rem; margin-bottom: .7rem; font-stretch: 100%; }
+    .site-footer a { color: #E6D9A8; }
+    .site-footer ul { list-style: none; margin: 0; padding: 0; display: grid; gap: .35rem; }
+    .legal { max-width: none; grid-column: 1 / -1; border-top: 1px solid #343C49; padding-top: 1.2rem; margin-top: 1rem; font-size: .88rem; }
+
+    /* ---------- responsive ---------- */
+    @media (max-width: 980px) {
+      .hero .wrap, .field, .careers, .contact { grid-template-columns: 1fr; }
+      .hero .wrap { padding-block: 3rem; gap: 2rem; }
+      .scopes, .work { grid-template-columns: 1fr 1fr; }
+      .scope:nth-child(3n+1) { padding-left: 1.6rem; border-left: 1px solid var(--compound); }
+      .scope:nth-child(2n+1) { padding-left: 0; border-left: none; }
+      .sectors { grid-template-columns: 1fr; gap: 2rem; }
+      .steps { grid-template-columns: 1fr 1fr; }
+      .steps li:nth-child(2)::after { display: none; }
+    }
+    @media (max-width: 760px) {
+      .menu-toggle { display: inline-block; }
+      .nav { display: none; position: absolute; top: 76px; left: 0; right: 0; background: var(--white); flex-direction: column; align-items: stretch; padding: 1rem 1.25rem 1.4rem; gap: .9rem; border-bottom: 1px solid var(--compound); }
+      .nav.open { display: flex; }
+      .nav .btn { justify-content: center; }
+      .scopes, .work, .steps, .grid-2 { grid-template-columns: 1fr; }
+      .scope, .scope + .scope, .scope:nth-child(3n+1) { padding: 1.4rem 0; border-left: none; }
+      .steps li::after { display: none; }
+      .site-footer .wrap { grid-template-columns: 1fr; }
+      .section { padding-block: 3.5rem; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="#top" aria-label="VanGuard Drywall &amp; Acoustics home">
+        <img src="assets/vanguard-logo.png" alt="VanGuard Drywall &amp; Acoustics" width="183" height="44" />
+      </a>
+      <button class="menu-toggle" aria-expanded="false" aria-controls="site-nav">Menu</button>
+      <nav class="nav" id="site-nav" aria-label="Main">
+        <a class="link" href="#scopes">What we build</a>
+        <a class="link" href="#sectors">Projects we take on</a>
+        <a class="link" href="#process">How we work</a>
+        <a class="link" href="#careers">Careers</a>
+        <a class="link" href="#contact">Contact</a>
+        <a class="btn btn-line employee-login" href="/">Employee login</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="hero" id="top">
+      <div class="wrap">
+        <div>
+          <h1>Framing, board and ceilings, built to the drawings.</h1>
+          <p class="lede">
+            VanGuard Drywall &amp; Acoustics builds steel stud framing, drywall, taping, insulation and acoustic
+            ceilings for multi-family, commercial and institutional projects.
+          </p>
+          <div class="hero-actions">
+            <a class="btn btn-navy" href="#contact">Request an estimate</a>
+            <a class="btn btn-line employee-login" href="/">Employee login</a>
+          </div>
+          <p class="hero-place">Based in St. Catharines, working across Niagara, Hamilton and the GTA.</p>
+        </div>
+
+        <figure style="margin:0">
+          <svg class="wall" viewBox="0 0 560 420" role="img" aria-labelledby="wall-title">
+            <title id="wall-title">Drawing of a steel stud wall: studs at 16 inches on centre, drywall sheets screwed on and the joint taped</title>
+            <!-- dimension line -->
+            <path class="dim" d="M70 26 V40 M182 26 V40 M70 33 H182" />
+            <text class="dim-text" x="96" y="20">16″ o.c.</text>
+            <!-- tracks -->
+            <path class="track" d="M40 58 H520 M40 52 H520" />
+            <path class="track" d="M40 392 H520 M40 398 H520" />
+            <!-- studs (C-channels) -->
+            <g>
+              <path class="stud" d="M64 58 V392 M76 58 V392" />
+              <path class="stud" d="M176 58 V392 M188 58 V392" />
+              <path class="stud" d="M288 58 V392 M300 58 V392" />
+              <path class="stud" d="M400 58 V392 M412 58 V392" />
+              <path class="stud" d="M500 58 V392 M512 58 V392" />
+            </g>
+            <path class="stud-web" d="M70 58 V392 M182 58 V392 M294 58 V392 M406 58 V392 M506 58 V392" />
+            <!-- board, hung left to right -->
+            <g class="sheet sheet-a">
+              <rect class="board" x="70" y="64" width="224" height="322" />
+              <g class="screw">
+                <circle cx="70" cy="96" r="3"/><circle cx="70" cy="176" r="3"/><circle cx="70" cy="256" r="3"/><circle cx="70" cy="336" r="3"/>
+                <circle cx="182" cy="96" r="3"/><circle cx="182" cy="176" r="3"/><circle cx="182" cy="256" r="3"/><circle cx="182" cy="336" r="3"/>
+              </g>
+            </g>
+            <g class="sheet sheet-b">
+              <rect class="board" x="294" y="64" width="112" height="322" />
+              <g class="screw">
+                <circle cx="406" cy="96" r="3"/><circle cx="406" cy="176" r="3"/><circle cx="406" cy="256" r="3"/><circle cx="406" cy="336" r="3"/>
+              </g>
+            </g>
+            <!-- taped joint over the centre stud -->
+            <path class="joint" d="M294 70 V380" />
+          </svg>
+          <figcaption class="wall-caption">Studs at 16 inches on centre, board screwed off and the joint taped, with the last bay still open.</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="section" id="scopes" aria-labelledby="scopes-title">
+      <div class="wrap">
+        <div class="section-head">
+          <h2 id="scopes-title">What we build</h2>
+          <p>Our crews handle the whole interior assembly, from the first chalk line to the last ceiling tile, so one contractor carries the wall from layout to finish.</p>
+        </div>
+        <div class="scopes">
+          <article class="scope">
+            <span class="layer" style="background:#5B6E7C"></span>
+            <h3>Steel stud framing</h3>
+            <p>Layout, track and studs, bulkheads and soffits, backing and blocking, and shaft wall.</p>
+          </article>
+          <article class="scope">
+            <span class="layer" style="background:#C9CEC9"></span>
+            <h3>Drywall boarding</h3>
+            <p>Walls, ceilings and bulkheads in regular, fire-rated, moisture-resistant and abuse-resistant board.</p>
+          </article>
+          <article class="scope">
+            <span class="layer" style="background:#B4973A"></span>
+            <h3>Taping and finishing</h3>
+            <p>Tape, coats and sanding to the finish level the spec calls for, up to Level 5 where light is critical.</p>
+          </article>
+          <article class="scope">
+            <span class="layer" style="background:#E9DDB4"></span>
+            <h3>Insulation and sound</h3>
+            <p>Batt insulation, acoustic batts in demising walls, vapour barrier and sealing.</p>
+          </article>
+          <article class="scope">
+            <span class="layer" style="background:#0B2556"></span>
+            <h3>Acoustic ceilings</h3>
+            <p>T-bar grid and ceiling tile, with clean cut-ins around lights, diffusers and sprinkler heads.</p>
+          </article>
+          <article class="scope">
+            <span class="layer" style="background:#202732"></span>
+            <h3>Secure and rated assemblies</h3>
+            <p>Secure-Lok Plus security ceilings and STC-rated wall assemblies for institutional work.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section band-navy" id="sectors" aria-labelledby="sectors-title">
+      <div class="wrap">
+        <div class="section-head">
+          <h2 id="sectors-title">Projects we take on</h2>
+          <p>We bid three kinds of work, and we staff and schedule each one differently.</p>
+        </div>
+        <div class="sectors">
+          <article class="sector">
+            <h3>Multi-family residential</h3>
+            <p>Apartment and condo buildings, townhouses and mixed-use residential.</p>
+            <ul>
+              <li>Repetitive unit layouts framed and boarded floor by floor</li>
+              <li>Demising walls built to their sound rating</li>
+              <li>Crews sized to keep pace with the trades behind us</li>
+            </ul>
+          </article>
+          <article class="sector">
+            <h3>Commercial fit-outs</h3>
+            <p>Restaurants, storefronts, offices and other tenant improvements.</p>
+            <ul>
+              <li>Tight schedules and night or weekend work in occupied malls</li>
+              <li>Feature bulkheads and ceilings that meet brand standards</li>
+              <li>Clean, quick turnover for the next trade</li>
+            </ul>
+          </article>
+          <article class="sector">
+            <h3>Institutional</h3>
+            <p>Hospitals, schools, universities and data centres.</p>
+            <ul>
+              <li>Fire-rated and STC-rated assemblies built to spec</li>
+              <li>Secure-Lok Plus and abuse-resistant systems</li>
+              <li>Infection-control and site-security requirements followed</li>
+            </ul>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="process" aria-labelledby="process-title">
+      <div class="wrap">
+        <div class="section-head">
+          <h2 id="process-title">How we work</h2>
+          <p>Accurate pricing up front means fewer extras later, and keeps the job on time and on budget.</p>
+        </div>
+        <ol class="steps">
+          <li>
+            <h3>Estimate</h3>
+            <p>We take off the drawings carefully, so the price you get is the price you pay unless the scope changes.</p>
+          </li>
+          <li>
+            <h3>Plan</h3>
+            <p>Every scope gets an hour budget and a crew that matches it: framers, boarders, tapers and ceiling installers.</p>
+          </li>
+          <li>
+            <h3>Build</h3>
+            <p>Our foremen track progress daily, raise RFIs early and request material before it holds up the work.</p>
+          </li>
+          <li>
+            <h3>Close out</h3>
+            <p>Deficiencies done, site cleaned, and progress draws that line up with the work in place.</p>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <section class="section band-white" aria-labelledby="field-title">
+      <div class="wrap field">
+        <div class="section-head" style="margin:0">
+          <h2 id="field-title">What general contractors get from us</h2>
+          <p>We run every job on our own project system, so you get straight answers about manpower, progress and paperwork.</p>
+          <a class="btn btn-navy" href="#contact" style="margin-top:.5rem">Talk to us about your project</a>
+        </div>
+        <ul class="field-list">
+          <li>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7Zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5Z"/></svg>
+            <div>
+              <h3>Real manpower counts</h3>
+              <p>Crew clock in by GPS on your site, so the number of people we say are there is the number that are there.</p>
+            </div>
+          </li>
+          <li>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2 4 5v6c0 5 3.4 9.7 8 11 4.6-1.3 8-6 8-11V5l-8-3Zm-1.2 14.2-3.5-3.5 1.4-1.4 2.1 2.1 4.8-4.8 1.4 1.4-6.2 6.2Z"/></svg>
+            <div>
+              <h3>Safety training you can check</h3>
+              <p>Every worker's safety certificates are on file with expiry dates, and foremen are warned before one runs out.</p>
+            </div>
+          </li>
+          <li>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 3h18v4H3V3Zm0 7h11v4H3v-4Zm0 7h15v4H3v-4Z"/></svg>
+            <div>
+              <h3>Progress tied to the schedule</h3>
+              <p>Each scope is tracked against its planned hours, so problems show up early instead of at the end.</p>
+            </div>
+          </li>
+          <li>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M4 4h16v12H7l-3 3V4Zm7 3v2h2V7h-2Zm0 4v3h2v-3h-2Z"/></svg>
+            <div>
+              <h3>RFIs and change orders on record</h3>
+              <p>Questions from site come to you numbered with the drawing reference, and every change order is priced and logged.</p>
+            </div>
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="section" id="work" aria-labelledby="work-title">
+      <div class="wrap">
+        <div class="section-head">
+          <h2 id="work-title">Recent work by our team</h2>
+          <p>Before VanGuard, our team built these projects as Altra Drywall.</p>
+        </div>
+        <div class="work">
+          <article class="job">
+            <div class="job-art" aria-hidden="true">
+              <svg viewBox="0 0 320 180" preserveAspectRatio="xMidYMid slice"><rect width="320" height="180" fill="#0B2556"/><path d="M0 120h320" stroke="#B4973A" stroke-width="3"/><path d="M40 120V60h90v60M150 120V40h130v80" fill="none" stroke="#5B6E7C" stroke-width="3"/><path d="M160 60h110M160 80h110M160 100h110" stroke="#24406F" stroke-width="2"/></svg>
+            </div>
+            <div class="job-body">
+              <h3>Tim Hortons</h3>
+              <p>York University, Toronto. Commercial fit-out.</p>
+            </div>
+          </article>
+          <article class="job">
+            <div class="job-art" aria-hidden="true">
+              <svg viewBox="0 0 320 180" preserveAspectRatio="xMidYMid slice"><rect width="320" height="180" fill="#0B2556"/><path d="M0 130h320" stroke="#B4973A" stroke-width="3"/><path d="M30 130V50h260v80" fill="none" stroke="#5B6E7C" stroke-width="3"/><path d="M30 70h260" stroke="#24406F" stroke-width="10"/><circle cx="90" cy="100" r="14" fill="none" stroke="#5B6E7C" stroke-width="3"/><circle cx="160" cy="100" r="14" fill="none" stroke="#5B6E7C" stroke-width="3"/><circle cx="230" cy="100" r="14" fill="none" stroke="#5B6E7C" stroke-width="3"/></svg>
+            </div>
+            <div class="job-body">
+              <h3>Starbucks</h3>
+              <p>York University, Toronto. Commercial fit-out.</p>
+            </div>
+          </article>
+          <article class="job">
+            <div class="job-art" aria-hidden="true">
+              <svg viewBox="0 0 320 180" preserveAspectRatio="xMidYMid slice"><rect width="320" height="180" fill="#0B2556"/><path d="M0 150h320M0 30h320" stroke="#5B6E7C" stroke-width="3"/><path d="M40 30v120M80 30v120M120 30v120M160 30v120M200 30v120M240 30v120M280 30v120" stroke="#5B6E7C" stroke-width="3"/><path d="M40 90h240" stroke="#B4973A" stroke-width="3"/></svg>
+            </div>
+            <div class="job-body">
+              <h3>Bulk Barn</h3>
+              <p>Burlington. Steel stud framing.</p>
+            </div>
+          </article>
+        </div>
+        <blockquote class="quote">
+          <p>“Easy to work with.”</p>
+          <footer>Xandry Mendez, on our team's work: competitive pricing and quality delivered.</footer>
+        </blockquote>
+      </div>
+    </section>
+
+    <section class="section band-navy" id="careers" aria-labelledby="careers-title">
+      <div class="wrap careers">
+        <div>
+          <h2 id="careers-title">Build with us</h2>
+          <p style="margin-top:1rem">We hire skilled trades and apprentices across Niagara and the GTA. Send us your trade, your tickets and where you can work.</p>
+          <ul class="trades">
+            <li>Steel stud framers</li>
+            <li>Drywallers</li>
+            <li>Tapers and finishers</li>
+            <li>Acoustic ceiling installers</li>
+            <li>Apprentices</li>
+            <li>Foremen</li>
+          </ul>
+          <a class="btn btn-gold careers-mail" href="#contact">Apply to join the crew</a>
+        </div>
+        <aside class="login-card" aria-labelledby="login-title">
+          <h3 id="login-title">Already on the crew?</h3>
+          <p>Clock in, see your schedule and tasks, fill out forms and keep your safety documents up to date.</p>
+          <a class="btn btn-gold employee-login" href="/">Employee login</a>
+        </aside>
+      </div>
+    </section>
+
+    <section class="section" id="contact" aria-labelledby="contact-title">
+      <div class="wrap contact">
+        <div>
+          <h2 id="contact-title">Request an estimate</h2>
+          <p style="margin-top:1rem" class="lede">Tell us about the project and we'll get back to you about pricing, scope and timing.</p>
+          <dl>
+            <dt>Phone</dt><dd><a class="contact-phone" href="tel:+12898667222">289-866-7222</a></dd>
+            <dt>Email</dt><dd><a class="contact-email" href="mailto:info@AltraDrywall.ca">info@AltraDrywall.ca</a></dd>
+            <dt>Office</dt><dd>3 - 55 Oakdale Ave<br />St. Catharines, ON</dd>
+          </dl>
+        </div>
+
+        <form class="estimate" id="estimate-form" novalidate>
+          <div class="grid-2">
+            <div class="field-row">
+              <label for="f-name">Your name</label>
+              <input id="f-name" name="name" autocomplete="name" required maxlength="120" />
+            </div>
+            <div class="field-row">
+              <label for="f-company">Company <span class="opt">(optional)</span></label>
+              <input id="f-company" name="company" autocomplete="organization" maxlength="160" />
+            </div>
+          </div>
+          <div class="grid-2">
+            <div class="field-row">
+              <label for="f-email">Email</label>
+              <input id="f-email" name="email" type="email" autocomplete="email" required maxlength="160" />
+            </div>
+            <div class="field-row">
+              <label for="f-phone">Phone <span class="opt">(optional)</span></label>
+              <input id="f-phone" name="phone" type="tel" autocomplete="tel" maxlength="40" />
+            </div>
+          </div>
+          <div class="grid-2">
+            <div class="field-row">
+              <label for="f-project">Project name</label>
+              <input id="f-project" name="project_name" required maxlength="200" />
+            </div>
+            <div class="field-row">
+              <label for="f-location">Location <span class="opt">(optional)</span></label>
+              <input id="f-location" name="location" maxlength="200" placeholder="City or address" />
+            </div>
+          </div>
+          <div class="grid-2">
+            <div class="field-row">
+              <label for="f-sector">Type of project</label>
+              <select id="f-sector" name="category">
+                <option value="">Choose one</option>
+                <option value="multi_family">Multi-family residential</option>
+                <option value="commercial_fit_out">Commercial fit-out</option>
+                <option value="institutional">Institutional</option>
+                <option value="other">Something else</option>
+              </select>
+            </div>
+            <div class="field-row">
+              <label for="f-due">Bid due or start date <span class="opt">(optional)</span></label>
+              <input id="f-due" name="due_date" type="date" />
+            </div>
+          </div>
+          <div class="field-row">
+            <label for="f-message">Scope and details</label>
+            <textarea id="f-message" name="message" required maxlength="4000" placeholder="What needs building, square footage or number of units, and where we can find the drawings"></textarea>
+          </div>
+          <div class="hp" aria-hidden="true">
+            <label for="f-website">Leave this empty</label>
+            <input id="f-website" name="website" tabindex="-1" autocomplete="off" />
+          </div>
+          <button class="btn btn-navy" type="submit">Send estimate request</button>
+          <p class="form-status" id="form-status" role="status" aria-live="polite"></p>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap">
+      <div>
+        <img src="assets/vanguard-logo.png" alt="VanGuard Drywall &amp; Acoustics" width="166" height="40" />
+        <p style="margin-top:1rem">Steel stud framing, drywall, taping, insulation and acoustic ceilings for multi-family, commercial and institutional projects.</p>
+      </div>
+      <div>
+        <h3>Contact</h3>
+        <ul>
+          <li><a class="contact-phone" href="tel:+12898667222">289-866-7222</a></li>
+          <li><a class="contact-email" href="mailto:info@AltraDrywall.ca">info@AltraDrywall.ca</a></li>
+          <li>3 - 55 Oakdale Ave, St. Catharines, ON</li>
+        </ul>
+      </div>
+      <div>
+        <h3>For our team</h3>
+        <ul>
+          <li><a class="employee-login" href="/">Employee login</a></li>
+          <li><a href="#careers">Careers</a></li>
+        </ul>
+      </div>
+      <p class="legal">© <span id="year">2026</span> VanGuard Drywall &amp; Acoustics. All rights reserved.</p>
+    </div>
+  </footer>
+
+  <script>
+    /* ------------------------------------------------------------------------------------
+       Site settings. Change these if the website is hosted somewhere other than the app
+       server (for example on your own domain).
+       - appUrl: where "Employee login" goes (the app's web address)
+       - apiUrl: the app server, which receives estimate requests
+       - email / phone: shown on the page and used for careers emails
+       When this page is opened from the app server itself (http://<server>:8000/site/),
+       both URLs are worked out automatically and nothing needs changing.
+    ------------------------------------------------------------------------------------- */
+    var SITE = {
+      appUrl: '',   // e.g. 'https://app.vanguarddrywall.ca'  or  'http://203.0.113.5:8000'
+      apiUrl: '',   // usually the same as appUrl
+      email: 'info@AltraDrywall.ca',
+      phone: '289-866-7222'
+    };
+
+    (function () {
+      var servedByApp = location.pathname.indexOf('/site') === 0;
+      var app = SITE.appUrl || (servedByApp ? location.origin : '');
+      var api = SITE.apiUrl || SITE.appUrl || (servedByApp ? location.origin : '');
+
+      // Employee login buttons
+      document.querySelectorAll('.employee-login').forEach(function (a) {
+        a.href = app ? app.replace(/\/$/, '') + '/' : '/';
+      });
+
+      // Contact details
+      document.querySelectorAll('.contact-email').forEach(function (a) {
+        a.href = 'mailto:' + SITE.email;
+        a.textContent = SITE.email;
+      });
+      document.querySelectorAll('.contact-phone').forEach(function (a) {
+        a.href = 'tel:+1' + SITE.phone.replace(/\D/g, '');
+        a.textContent = SITE.phone;
+      });
+      var careers = document.querySelector('.careers-mail');
+      if (careers) {
+        careers.href = 'mailto:' + SITE.email + '?subject=' + encodeURIComponent('Job application: [your trade]') +
+          '&body=' + encodeURIComponent('Name:\nPhone:\nTrade and years of experience:\nTickets and safety training:\nAreas I can work:\n');
+      }
+      document.getElementById('year').textContent = new Date().getFullYear();
+
+      // Mobile menu
+      var toggle = document.querySelector('.menu-toggle');
+      var nav = document.getElementById('site-nav');
+      toggle.addEventListener('click', function () {
+        var open = nav.classList.toggle('open');
+        toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+        toggle.textContent = open ? 'Close' : 'Menu';
+      });
+      nav.querySelectorAll('a').forEach(function (a) {
+        a.addEventListener('click', function () {
+          nav.classList.remove('open');
+          toggle.setAttribute('aria-expanded', 'false');
+          toggle.textContent = 'Menu';
+        });
+      });
+
+      // Estimate request: sent to the app (it lands in Bids for the estimators).
+      // If the app can't be reached, the visitor's email program opens instead.
+      var form = document.getElementById('estimate-form');
+      var status = document.getElementById('form-status');
+      function say(text, ok) {
+        status.textContent = text;
+        status.className = 'form-status ' + (ok ? 'ok' : 'err');
+      }
+      function mailFallback(data) {
+        var body = 'Name: ' + data.name + '\nCompany: ' + (data.company || '') + '\nEmail: ' + data.email +
+          '\nPhone: ' + (data.phone || '') + '\nProject: ' + data.project_name + '\nLocation: ' + (data.location || '') +
+          '\nType: ' + (data.category || '') + '\nBid due / start: ' + (data.due_date || '') + '\n\n' + data.message;
+        location.href = 'mailto:' + SITE.email + '?subject=' + encodeURIComponent('Estimate request: ' + data.project_name) +
+          '&body=' + encodeURIComponent(body);
+      }
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var data = {};
+        new FormData(form).forEach(function (v, k) { data[k] = String(v).trim(); });
+        var missing = [];
+        if (!data.name) missing.push('your name');
+        if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(data.email)) missing.push('a valid email');
+        if (!data.project_name) missing.push('the project name');
+        if (!data.message) missing.push('the scope and details');
+        if (missing.length) {
+          say('Please add ' + missing.join(', ') + '.', false);
+          return;
+        }
+        if (!api) {
+          mailFallback(data);
+          say('Your email program has opened with the request filled in. Press send to reach us.', true);
+          return;
+        }
+        var button = form.querySelector('button[type=submit]');
+        button.disabled = true;
+        say('Sending…', true);
+        fetch(api.replace(/\/$/, '') + '/api/public/estimate-request', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        }).then(function (r) {
+          return r.json().catch(function () { return {}; }).then(function (body) { return { ok: r.ok, body: body }; });
+        }).then(function (res) {
+          if (res.ok) {
+            form.reset();
+            say('Thanks, your request was sent. We\'ll be in touch soon.', true);
+          } else {
+            say((res.body && typeof res.body.detail === 'string' ? res.body.detail : 'That didn\'t go through.') +
+              ' You can also call ' + SITE.phone + '.', false);
+          }
+        }).catch(function () {
+          mailFallback(data);
+          say('We couldn\'t reach our server, so your email program has opened with the request filled in.', true);
+        }).then(function () { button.disabled = false; });
+      });
+    })();
+  </script>
+</body>
+</html>

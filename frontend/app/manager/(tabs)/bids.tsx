@@ -256,7 +256,7 @@ export default function BidsScreen() {
                 ) : null}
                 {b.bid_amount != null ? <Text style={ui.muted}>{money(b.bid_amount)}</Text> : null}
                 {b.follow_up_due ? <Text style={{ fontSize: 12, color: COLORS.warning, fontWeight: '700' }}>Follow up now</Text> : null}
-                {b.source === 'email' ? <Text style={ui.muted}>from inbox</Text> : null}
+                {b.source === 'email' ? <Text style={ui.muted}>from inbox</Text> : b.source === 'website' ? <Text style={ui.muted}>from website</Text> : null}
               </Row>
             </Card>
           ))

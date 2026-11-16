@@ -276,6 +276,31 @@ async def main():
         check(got == expect, "%-26s %-20s %s" % (fn.__name__, who["role"], "allowed" if got else "blocked"))
     await expect_error(M.list_releases(site_id=None, current_user=fm), 403, "foreman blocked from release costs (in-function check)")
 
+    print("\n-- website estimate requests")
+    import fastapi as FA
+    from features import public as PUB
+    req = PUB.EstimateRequest(name="Gina GC", email="gina@buildco.ca", company="BuildCo", project_name="Lakeview Condos Phase 2",
+                              location="Niagara Falls", category="multi_family", due_date="2026-12-04",
+                              message="48 units, framing board tape and ACT. Drawings on our portal.")
+    before = await db.notifications.count_documents({})
+    r = await PUB.estimate_request(req, FA.Request(host="10.0.0.9"))
+    bid = await db.bids.find_one({"source": "website"})
+    check(r["ok"] and bid is not None, "website request becomes a bid")
+    check(bid["status"] == "invited" and bid["category"] == "multi_family" and bid["due_date"] == "2026-12-04",
+          "bid has status, type and due date")
+    check(bid["general_contractor"] == "BuildCo" and bid["contact_email"] == "gina@buildco.ca", "bid has GC and contact")
+    check(await db.notifications.count_documents({}) > before, "estimators/coordinators notified")
+    bot = PUB.EstimateRequest(**{**req.model_dump(), "website": "http://spam"})
+    n = await db.bids.count_documents({})
+    await PUB.estimate_request(bot, FA.Request(host="10.0.0.8"))
+    check(await db.bids.count_documents({}) == n, "honeypot submissions are dropped")
+    for _ in range(4):
+        await PUB.estimate_request(req, FA.Request(host="10.0.0.7"))
+    await PUB.estimate_request(req, FA.Request(host="10.0.0.7"))
+    await expect_error(PUB.estimate_request(req, FA.Request(host="10.0.0.7")), 429, "6th request in an hour from one IP")
+    await expect_error(PUB.estimate_request(PUB.EstimateRequest(**{**req.model_dump(), "email": "nope"}),
+                                            FA.Request(host="10.0.0.6")), 400, "bad email rejected")
+
     print("\n-- checks run together")
     res = await N.run_checks()
     check("error" not in res.values(), "all background checks ran without errors: %s" % res)

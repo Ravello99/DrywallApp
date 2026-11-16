@@ -24,3 +24,8 @@ class FastAPI(_Router):
         def deco(fn): setattr(self, "on_" + name, fn); return fn
         return deco
     def add_middleware(self, *a, **k): pass
+    def mount(self, *a, **k): pass
+class Request:
+    def __init__(self, headers=None, host="127.0.0.1"):
+        self.headers = headers or {}
+        self.client = type("C", (), {"host": host})()

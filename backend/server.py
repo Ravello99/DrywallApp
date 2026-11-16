@@ -1188,22 +1188,29 @@ async def startup_event():
 app.include_router(api_router)
 
 from features import (bids, change_orders, field, invoices, manpower, materials,  # noqa: E402
-                      notifications, projects, rfis, tasks)
+                      notifications, projects, public, rfis, tasks)
 
-for _module in (tasks, projects, materials, manpower, rfis, change_orders, invoices, bids, notifications, field):
+for _module in (tasks, projects, materials, manpower, rfis, change_orders, invoices, bids, notifications, field,
+                public):
     app.include_router(_module.router)
 
 
 # Serve the built web app (frontend/dist, made by `expo export --platform web`) on the
 # same port as the API, so the office can use the app in a browser. API routes and
 # /docs are registered first, so they always win over this catch-all.
+# The company website (website/ in the repo) at /site/ so it can be previewed on this server.
+WEBSITE_DIR = Path(os.environ.get("WEBSITE_DIR", ROOT_DIR.parent / "website")).resolve()
+if (WEBSITE_DIR / "index.html").is_file():
+    from fastapi.staticfiles import StaticFiles
+    app.mount("/site", StaticFiles(directory=str(WEBSITE_DIR), html=True), name="website")
+
 FRONTEND_DIST = Path(os.environ.get("FRONTEND_DIST", ROOT_DIR.parent / "frontend" / "dist")).resolve()
 if (FRONTEND_DIST / "index.html").is_file():
     from fastapi.responses import FileResponse
 
     @app.get("/{full_path:path}", include_in_schema=False)
     async def serve_web_app(full_path: str):
-        if full_path.startswith("api/") or full_path == "api":
+        if full_path.startswith("api/") or full_path == "api" or full_path == "site" or full_path.startswith("site/"):
             raise HTTPException(status_code=404, detail="Not found")
         if full_path:
             candidate = (FRONTEND_DIST / full_path).resolve()
