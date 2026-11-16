@@ -71,14 +71,18 @@ export default function ManagerLayout() {
       screenOptions={{
         tabBarActiveTintColor: COLORS.primary,
         tabBarInactiveTintColor: COLORS.gray400,
+        // No fixed height: the tab bar sizes itself to fit icon + label and adds the phone's
+        // bottom safe-area space (a fixed 60px cut the labels off).
         tabBarStyle: {
           backgroundColor: COLORS.white,
           borderTopWidth: 1,
           borderTopColor: COLORS.gray200,
-          height: 60,
-          paddingBottom: 8,
-          paddingTop: 8,
         },
+        tabBarItemStyle: {
+          paddingTop: 4,
+          paddingBottom: 2,
+        },
+        tabBarLabelPosition: 'below-icon',
         tabBarLabelStyle: {
           fontSize: 12,
           fontWeight: '600',
