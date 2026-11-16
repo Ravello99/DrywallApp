@@ -20,6 +20,7 @@ export default function ManagerLayout() {
     resolveSession().then((u) => {
       if (!live) return;
       if (!u) return setTarget('/');
+      if (u.must_change_password) return setTarget('/change-password');
       if (!(isOfficeRole(u.role))) return setTarget(homeFor(u.role));
       setUser(u);
       setChecking(false);
@@ -56,6 +57,8 @@ export default function ManagerLayout() {
         <Stack.Screen name="forms" options={{ title: 'Forms' }} />
         <Stack.Screen name="notifications" options={{ title: 'Notifications' }} />
         <Stack.Screen name="accounting" options={{ title: 'Accounting' }} />
+        <Stack.Screen name="time" options={{ title: 'Time & Attendance' }} />
+        <Stack.Screen name="expenses" options={{ title: 'Receipts & Expenses' }} />
         <Stack.Screen name="project/[id]" options={{ title: 'Project' }} />
     </Stack>
   );

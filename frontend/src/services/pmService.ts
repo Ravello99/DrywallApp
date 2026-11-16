@@ -72,9 +72,29 @@ export const changeOrderApi = {
   remove: (id: string) => del(`/change-orders/${id}`),
 };
 
+export const timeclockApi = {
+  open: () => get('/timeclock/open'),
+  records: (start: string, end: string, extra: { user_id?: string; site_id?: string } = {}) => get('/timeclock/records', { start, end, ...extra }),
+  forceOut: (id: string, reason: string, clockOut?: string) => post(`/timeclock/records/${id}/force-out`, { reason, clock_out: clockOut || null }),
+  edit: (id: string, data: { clock_in: string; clock_out?: string | null; site_id?: string; task_id?: string | null; reason: string }) => put(`/timeclock/records/${id}`, data),
+  add: (data: { user_id: string; site_id: string; task_id?: string | null; clock_in: string; clock_out: string; reason: string }) => post('/timeclock/records', data),
+  remove: (id: string, reason: string) => del(`/timeclock/records/${id}?reason=${encodeURIComponent(reason)}`),
+};
+
+export const expensesApi = {
+  meta: () => get('/expenses/meta'),
+  list: (params: { site_id?: string; status?: string; mine?: boolean; start?: string; end?: string } = {}) => get('/expenses', params),
+  summary: (start?: string, end?: string) => get('/expenses/summary', { start, end }),
+  create: (data: any) => post('/expenses', data),
+  update: (id: string, data: any) => put(`/expenses/${id}`, data),
+  review: (id: string, action: 'approve' | 'reject' | 'reimbursed' | 'reopen', note?: string) => post(`/expenses/${id}/review`, { action, note }),
+  receipt: (id: string) => get(`/expenses/${id}/receipt`),
+  remove: (id: string) => del(`/expenses/${id}`),
+};
+
 export const accountingApi = {
   overview: (weekStart?: string) => get('/accounting/overview', weekStart ? { week_start: weekStart } : {}),
-  exportLink: (data: { kind: 'hours' | 'draws'; start?: string; end?: string; site_id?: string; user_id?: string; format?: 'xlsx' | 'zip' }) =>
+  exportLink: (data: { kind: 'hours' | 'draws' | 'expenses'; start?: string; end?: string; site_id?: string; user_id?: string; format?: 'xlsx' | 'zip' }) =>
     post('/accounting/export-link', data),
 };
 

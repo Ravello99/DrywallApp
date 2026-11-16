@@ -85,6 +85,17 @@ export default function AccountingScreen() {
               </Card>
             ))}
 
+            {data.expenses && (data.expenses.total > 0 || data.expenses.pending_review > 0) ? (
+              <Card>
+                <Text style={ui.fieldLabel}>Receipts this week</Text>
+                <Text style={ui.body}>
+                  {money(data.expenses.total, 2)} logged
+                  {data.expenses.pending_review ? ` · ${data.expenses.pending_review} waiting for review` : ''}
+                  {data.expenses.to_reimburse ? ` · ${money(data.expenses.to_reimburse, 2)} to pay back` : ''}
+                </Text>
+              </Card>
+            ) : null}
+
             <SectionTitle title="By job" />
             {labour.by_site.length === 0 ? <Empty icon="schedule" text="No hours this week" /> : null}
             {labour.by_site.map((s: any) => (
@@ -274,6 +285,11 @@ function Downloads({ weekStart, weekEnd }: { weekStart: string; weekEnd: string 
     );
   };
 
+  const downloadExpenses = (format: 'xlsx' | 'zip') => {
+    if (!ISO.test(start) || !ISO.test(end)) return Alert.alert('Enter the dates as YYYY-MM-DD');
+    openServerDocument(() => accountingApi.exportLink({ kind: 'expenses', start, end, format, site_id: scope === 'job' && siteId ? siteId : undefined }), { download: true });
+  };
+
   return (
     <>
       <SectionTitle title="Employee hours" />
@@ -298,6 +314,16 @@ function Downloads({ weekStart, weekEnd }: { weekStart: string; weekEnd: string 
         <Text style={[ui.muted, { marginTop: 10 }]}>
           The workbook has a summary by job, a summary by employee, every shift, and a tab for each job and each employee: dates, clock-in and out times, regular and overtime hours, rate and pay.
         </Text>
+      </Card>
+
+      <SectionTitle title="Receipts & expenses" />
+      <Card>
+        <Text style={[ui.body, { marginBottom: 10 }]}>
+          Every receipt logged for the period above{scope === 'job' && siteId ? ' (this job only)' : ''}: totals by job and category, and who needs paying back.
+        </Text>
+        <Button title="Excel workbook" icon="table-view" onPress={() => downloadExpenses('xlsx')} />
+        <View style={{ height: 8 }} />
+        <Button title="ZIP with every receipt photo" kind="secondary" icon="folder-zip" onPress={() => downloadExpenses('zip')} />
       </Card>
 
       <SectionTitle title="Progress draws" />

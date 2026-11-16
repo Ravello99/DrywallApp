@@ -342,9 +342,145 @@ async def main():
     reg = await ACC.export(token=(await ACC.export_link(ACC.ExportIn(kind="draws"), coord))["url"].split("token=")[1])
     check(load_workbook(_io.BytesIO(reg.body))["Invoice register"].cell(row=2, column=1).value == "24-017-D01",
           "invoice register download")
-    for fn in (ACC.overview, ACC.export_link):
+    for fn in (ACC.overview,):
         check(await allowed(fn, pm) is False and await allowed(fn, est) is False and await allowed(fn, coord) is True,
               "%s: accounting only (admin / coordinator)" % fn.__name__)
+
+    print("\n-- passwords: first sign-in, forgot, reset, manager reset")
+    from features import account as ACCT
+    import fastapi as FA
+    new = await db.users.find_one({"_id": e3["_id"]})
+    check(new.get("must_change_password") is True, "new accounts must set their own password")
+    await expect_error(core.get_current_user(user=new), 403, "app blocked until the password is changed")
+    Creds = type("Creds", (), {})
+    def creds(tok):
+        c = Creds(); c.credentials = tok; return c
+    tok_old = core.token_for(new)
+    me = await core.get_signed_in_user(creds(tok_old))
+    check(me["email"] == new["email"], "/auth/me still works so the app knows to ask")
+    await expect_error(ACCT.change_password(ACCT.ChangeIn(current_password="wrong", new_password="Better4ever"), new),
+                       400, "wrong current password")
+    await expect_error(ACCT.change_password(ACCT.ChangeIn(current_password="password1", new_password="short1"), new),
+                       400, "too short")
+    await expect_error(ACCT.change_password(ACCT.ChangeIn(current_password="password1", new_password="password1"), new),
+                       400, "same as current")
+    res = await ACCT.change_password(ACCT.ChangeIn(current_password="password1", new_password="Better4ever"), new)
+    new = await db.users.find_one({"_id": e3["_id"]})
+    check(not new.get("must_change_password") and res.access_token, "password changed, signed in with a new token")
+    await expect_error(core.get_signed_in_user(creds(tok_old)), 401, "old token stops working after a change")
+    check((await core.get_signed_in_user(creds(res.access_token)))["_id"] == new["_id"], "new token works")
+    before = await db.notifications.count_documents({"title": {"$regex": "reset their password"}})
+    r = await ACCT.forgot_password(ACCT.ForgotIn(email="tom.taper@vanguard.ca"), FA.Request(host="10.1.1.1"))
+    r2 = await ACCT.forgot_password(ACCT.ForgotIn(email="nobody@vanguard.ca"), FA.Request(host="10.1.1.1"))
+    check(r == r2 and r["email_enabled"] is False, "same answer for real and unknown emails (no email set up here)")
+    check(await db.notifications.count_documents({"title": {"$regex": "reset their password"}}) > before,
+          "office told someone needs a password reset")
+    reset_tok = core.make_link_token("pw_reset", {"uid": str(new["_id"]), "pwv": int(new.get("pw_version") or 0)})
+    res = await ACCT.reset_password(ACCT.ResetIn(token=reset_tok, new_password="Fresh2026start"))
+    check(res.user.email == "tom.taper@vanguard.ca", "reset link sets a new password and signs in")
+    await expect_error(ACCT.reset_password(ACCT.ResetIn(token=reset_tok, new_password="Again2026start")), 400,
+                       "reset link works only once")
+    temp = await ACCT.manager_reset(str(new["_id"]), pm)
+    new = await db.users.find_one({"_id": e3["_id"]})
+    check(new["must_change_password"] and core.verify_password(temp["temporary_password"], new["password"]),
+          "manager reset gives a temporary password (%s) that must be changed" % temp["temporary_password"])
+    await expect_error(ACCT.manager_reset(str(admin["_id"]), pm), 403, "only an admin can reset an admin")
+    check(await allowed(ACCT.manager_reset, fm) is False and await allowed(ACCT.manager_reset, coord) is True,
+          "foremen can't reset passwords; coordinators can")
+
+    print("\n-- time & attendance: force clock-out, edit, add, delete")
+    from features import timeclock as TC
+    now = datetime.utcnow()
+    await db.clock_records.delete_many({"user_id": str(e2["_id"])})
+    rid = (await db.clock_records.insert_one({"user_id": str(e2["_id"]), "user_name": "Ann Boarder", "site_id": sid,
+        "site_name": "Riverside Tower", "clock_in": now - timedelta(hours=9), "clock_out": None, "status": "clocked_in",
+        "clock_in_location": {"latitude": 43.1, "longitude": -79.2}, "pay_rate": 36.0})).inserted_id
+    opened = await TC.open_shifts(pm)
+    check(any(o["id"] == str(rid) for o in opened), "open shifts listed")
+    out = await TC.force_out(str(rid), TC.ForceOutIn(reason="Forgot to clock out",
+                                                     clock_out=(now - timedelta(hours=1)).isoformat() + "Z"), pm)
+    check(out["status"] == "clocked_out" and out["total_hours"] == 8.0, "forced out at the time given: 8 h")
+    check(out["edits"][0]["action"] == "force_clock_out" and out["edits"][0]["by_name"] == "Pat PM", "audit trail kept")
+    await expect_error(TC.force_out(str(rid), TC.ForceOutIn(reason="again"), pm), 400, "can't force out twice")
+    ed = await TC.edit_record(str(rid), TC.EditIn(clock_in=(now - timedelta(hours=10)).isoformat() + "Z",
+                                                  clock_out=(now - timedelta(hours=1)).isoformat() + "Z",
+                                                  reason="Started at 7 per foreman"), coord)
+    check(ed["total_hours"] == 9.0 and len(ed["edits"]) == 2 and ed["edits"][1]["before"]["hours"] == 8.0,
+          "hours edited to 9 with before/after recorded")
+    await expect_error(TC.edit_record(str(rid), TC.EditIn(clock_in=(now - timedelta(hours=1)).isoformat() + "Z",
+                                                          clock_out=(now - timedelta(hours=2)).isoformat() + "Z",
+                                                          reason="oops"), coord), 400, "clock-out before clock-in")
+    await expect_error(TC.edit_record(str(rid), TC.EditIn(clock_in=(now - timedelta(hours=2)).isoformat() + "Z",
+                                                          clock_out=(now + timedelta(hours=2)).isoformat() + "Z",
+                                                          reason="future"), coord), 400, "no future times")
+    y = now - timedelta(days=1)
+    add = await TC.add_shift(TC.AddShiftIn(user_id=str(e2["_id"]), site_id=sid, clock_in=(y - timedelta(hours=8)).isoformat() + "Z",
+                                           clock_out=y.isoformat() + "Z", reason="No phone on site"), pm)
+    check(add["manual"] and add["total_hours"] == 8.0, "missed shift added (8 h)")
+    await expect_error(TC.add_shift(TC.AddShiftIn(user_id=str(e2["_id"]), site_id=sid,
+                                                  clock_in=(y - timedelta(hours=4)).isoformat() + "Z",
+                                                  clock_out=(y + timedelta(hours=1)).isoformat() + "Z", reason="dupe"), pm),
+                       400, "overlapping shift refused")
+    check(await db.notifications.count_documents({"user_id": str(e2["_id"]), "kind": "clock"}) >= 3,
+          "employee told about each change")
+    await TC.delete_shift(add["id"], reason="Entered twice", current_user=coord)
+    check(await db.deleted_clock_records.count_documents({}) == 1, "deleted shift kept in the deleted log")
+    check(await allowed(TC.force_out, fm) is False and await allowed(TC.force_out, est) is False
+          and await allowed(TC.force_out, pm) is True, "only PM / coordinator / admin can fix hours")
+    rid2 = (await db.clock_records.insert_one({"user_id": str(e1["_id"]), "user_name": "Ed Framer", "site_id": sid,
+        "site_name": "Riverside Tower", "clock_in": now - timedelta(hours=2), "clock_out": None, "status": "clocked_in",
+        "clock_in_location": {"latitude": 43.1, "longitude": -79.2}})).inserted_id
+    await db.clock_records.delete_many({"user_id": str(e1["_id"]), "_id": {"$ne": rid2}, "status": "clocked_in"})
+    o = await server.clock_out(core.ClockOutRequest(location=None), e1)
+    check(o.status == "clocked_out" and o.flagged, "clock out works with no GPS (flagged for review)")
+
+    print("\n-- receipts / expenses")
+    from features import expenses as EX
+    import base64 as _b64
+    img = "data:image/jpeg;base64," + _b64.b64encode(b"\xff\xd8\xff" + b"x" * 500).decode()
+    await expect_error(EX.create(EX.ExpenseIn(site_id=sid, vendor="Home Depot", amount=113, date="2026-11-10"), fm),
+                       400, "receipt photo required")
+    x1 = await EX.create(EX.ExpenseIn(site_id=sid, vendor="Home Depot", amount=113, tax=13, date="2026-11-10",
+                                      category="materials", paid_with="personal", receipt_image=img), fm)
+    check(x1["subtotal"] == 100 and x1["site_name"] == "Riverside Tower" and x1["status"] == "submitted",
+          "foreman logs a receipt on his job ($100 + $13 tax)")
+    x2 = await EX.create(EX.ExpenseIn(site_id="office", vendor="Staples", amount=45.2, date="2026-11-11",
+                                      category="office_supplies", receipt_image=img), est)
+    check(x2["site_name"] == "Office", "estimator logs an Office expense")
+    await expect_error(EX.create(EX.ExpenseIn(site_id="office", vendor="X", amount=5, date="2099-01-01",
+                                              receipt_image=img), est), 400, "future date refused")
+    check(len(await EX.list_expenses(current_user=fm)) == 1, "foreman sees only his own")
+    check(len(await EX.list_expenses(current_user=pm)) == 2, "PM sees all")
+    rc = await EX.receipt(x1["id"], pm)
+    check(rc["data_uri"].startswith("data:image/jpeg;base64,"), "receipt photo can be viewed")
+    await expect_error(EX.receipt(x2["id"], fm), 404, "foreman can't open someone else's receipt")
+    await expect_error(EX.review(x1["id"], EX.ReviewIn(action="reject"), coord), 400, "reject needs a reason")
+    ap = await EX.review(x1["id"], EX.ReviewIn(action="approve"), coord)
+    check(ap["needs_reimbursement"], "approved personal receipt waits for reimbursement")
+    await expect_error(EX.update(x1["id"], EX.ExpenseUpdate(amount=200), fm), 400, "can't edit after review")
+    rb = await EX.review(x1["id"], EX.ReviewIn(action="reimbursed"), coord)
+    check(rb["status"] == "reimbursed", "marked reimbursed")
+    await expect_error(EX.review(x2["id"], EX.ReviewIn(action="reimbursed"), coord), 400,
+                       "company-card receipts aren't reimbursed")
+    check(await allowed(EX.review, pm) is False and await allowed(EX.create, e1) is False,
+          "PMs can't approve; crew members can't submit")
+    sm = await EX.summary(None, None, pm)
+    check(sm["total"] == 158.2 and sm["pending_review"] == 1, "expense totals by job/category")
+    import io as _io, zipfile as _zip
+    from openpyxl import load_workbook
+    from features import accounting as ACC
+    lk = await ACC.export_link(ACC.ExportIn(kind="expenses", start="2026-11-01", end="2026-11-30"), pm)
+    xl = await ACC.export(token=lk["url"].split("token=")[1])
+    wb = load_workbook(_io.BytesIO(xl.body))
+    check(wb["Expenses"].max_row == 7 and "Reimbursements" in wb.sheetnames, "expense workbook (%s)" % wb.sheetnames)
+    zp = await ACC.export(token=(await ACC.export_link(ACC.ExportIn(kind="expenses", start="2026-11-01",
+                                                                     end="2026-11-30", format="zip"), coord))["url"].split("token=")[1])
+    names = _zip.ZipFile(_io.BytesIO(zp.body)).namelist()
+    check(len([n for n in names if n.startswith("Receipts/")]) == 2, "zip has every receipt photo (%s)" % names)
+    await expect_error(ACC.export_link(ACC.ExportIn(kind="hours", start="2026-11-01", end="2026-11-30"), pm), 403,
+                       "PMs can download expenses but not payroll")
+    await EX.delete(x2["id"], est)
+    check(await db.expense_receipts.count_documents({}) == 1, "deleting a receipt removes its photo")
 
     print("\n-- website estimate requests")
     import fastapi as FA

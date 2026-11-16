@@ -20,6 +20,7 @@ export default function WorkerLayout() {
     resolveSession().then((u) => {
       if (!live) return;
       if (!u) return setTarget('/');
+      if (u.must_change_password) return setTarget('/change-password');
       if (!(!isOfficeRole(u.role))) return setTarget(homeFor(u.role));
       setUser(u);
       setChecking(false);
@@ -57,6 +58,7 @@ export default function WorkerLayout() {
         <Stack.Screen name="rfis" options={{ title: 'RFIs' }} />
         <Stack.Screen name="crew-safety" options={{ title: 'Crew Safety' }} />
         <Stack.Screen name="notifications" options={{ title: 'Notifications' }} />
+        <Stack.Screen name="expenses" options={{ title: 'Receipts' }} />
     </Stack>
   );
 }

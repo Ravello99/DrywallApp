@@ -154,6 +154,38 @@ OVERTIME_WEEKLY_HOURS=44    # Ontario ESA
 OVERTIME_MULTIPLIER=1.5
 ```
 
+### Passwords
+
+- New accounts, and anyone a manager resets, sign in with a temporary password and must choose
+  their own before using the app. Changing a password signs that person out on other devices.
+- **Forgot password?** on the sign-in screen tells the office (admins, PMs and coordinators get a
+  notification). A manager opens **Team & Sites**, taps the lock icon on the person and reads them
+  the temporary password.
+- To also email a reset link, add a mailbox to `backend/.env` and run `python3 run.py` again. With a
+  HostPapa email account this is usually:
+
+```
+SMTP_HOST=mail.vanguarddrywall.ca
+SMTP_PORT=465
+SMTP_USER=noreply@vanguarddrywall.ca
+SMTP_PASSWORD=the-mailbox-password
+SMTP_FROM=VanGuard Drywall <noreply@vanguarddrywall.ca>
+```
+
+### Time & attendance
+
+**More → Time & Attendance** (admin, PMs, coordinators): who's on site now with **Clock out** for
+anyone who forgot; every shift by week with **Edit** (times, job) and **Add a missed shift**. A reason
+is required, each change is kept on the shift, and the employee is notified. Payroll and the hour
+downloads use the corrected hours.
+
+### Receipts & expenses
+
+Estimators, coordinators, PMs, foremen and admins can photograph a receipt and charge it to a job or
+**Office** (More → Receipts). Admin and coordinators approve, reject (with a reason) and mark
+personal purchases paid back. **Accounting → Downloads** has an Excel register (by job, category,
+reimbursements) and a ZIP with every receipt photo.
+
 ### Domain and HTTPS
 
 To serve the app at https://app.vanguarddrywall.ca, follow [DOMAIN_SETUP.md](DOMAIN_SETUP.md):

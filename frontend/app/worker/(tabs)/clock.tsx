@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,7 +9,11 @@ import {
   ScrollView,
   Modal,
   FlatList,
+  AppState,
+  Platform,
 } from 'react-native';
+import { useFocusEffect } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
@@ -21,6 +25,31 @@ import { COLORS } from '../../../src/constants/colors';
 import Footer from '../../../src/components/Footer';
 import { tasksApi, apiError } from '../../../src/services/pmService';
 import { Chips } from '../../../src/components/ui';
+import LocationPrompt from '../../../src/components/LocationPrompt';
+
+// Server times have no time zone marker; they're UTC.
+const utc = (v: string) => new Date(v.endsWith('Z') || v.includes('+') ? v : `${v}Z`);
+const ACTIVE_KEY = 'clock.activeRecord';
+
+const saveActive = (rec: any) => {
+  try {
+    if (Platform.OS === 'web') {
+      if (rec) localStorage.setItem(ACTIVE_KEY, JSON.stringify(rec));
+      else localStorage.removeItem(ACTIVE_KEY);
+    } else if (rec) AsyncStorage.setItem(ACTIVE_KEY, JSON.stringify(rec));
+    else AsyncStorage.removeItem(ACTIVE_KEY);
+  } catch {
+    /* storage unavailable: the server is still the source of truth */
+  }
+};
+const loadActive = async () => {
+  try {
+    const raw = Platform.OS === 'web' ? localStorage.getItem(ACTIVE_KEY) : await AsyncStorage.getItem(ACTIVE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+};
 
 export default function ClockScreen() {
   const [loading, setLoading] = useState(true);
@@ -33,6 +62,7 @@ export default function ClockScreen() {
   // "What are you working on?" (feeds task hour budgets)
   const [siteTasks, setSiteTasks] = useState<{ id: string; title: string; scope_label?: string }[]>([]);
   const [taskId, setTaskId] = useState('');
+  const [statusKnown, setStatusKnown] = useState(true);
 
   const siteForTasks = activeRecord?.site_id || selectedSite?.id;
   useEffect(() => {
@@ -60,6 +90,39 @@ export default function ClockScreen() {
     requestLocationPermission();
   }, []);
 
+  // Re-check with the server whenever the screen is shown, the app comes back to the
+  // foreground, and every minute while it's open, so a shift started (or ended by the office)
+  // while the app was closed always shows the right button.
+  const refreshActive = useCallback(async () => {
+    try {
+      const res = await clockService.getActiveRecord();
+      const rec = res.status === 'clocked_in' ? res.record : null;
+      setActiveRecord(rec);
+      saveActive(rec);
+      setStatusKnown(true);
+    } catch {
+      // Offline or server unreachable: fall back to the last known shift.
+      const cached = await loadActive();
+      if (cached) setActiveRecord(cached);
+      setStatusKnown(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshActive();
+      const timer = setInterval(refreshActive, 60000);
+      return () => clearInterval(timer);
+    }, [refreshActive]),
+  );
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') refreshActive();
+    });
+    return () => sub.remove();
+  }, [refreshActive]);
+
   const requestLocationPermission = async () => {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
@@ -76,22 +139,18 @@ export default function ClockScreen() {
     }
   };
 
+  // Sites and the current shift load separately, so a problem loading sites never hides the
+  // Clock Out button.
   const loadData = async () => {
+    await refreshActive();
     try {
-      const [sitesRes, activeRes] = await Promise.all([
-        siteService.getSites(),
-        clockService.getActiveRecord(),
-      ]);
-      
+      const sitesRes = await siteService.getSites();
       setSites(sitesRes);
       if (sitesRes.length > 0 && !selectedSite) {
         setSelectedSite(sitesRes[0]);
       }
-      
-      setActiveRecord(activeRes.status === 'clocked_in' ? activeRes.record : null);
     } catch (error) {
-      console.error('Error loading data:', error);
-      Alert.alert('Error', 'Failed to load data');
+      console.error('Error loading sites:', error);
     } finally {
       setLoading(false);
     }
@@ -99,9 +158,12 @@ export default function ClockScreen() {
 
   // Take a fresh, high-accuracy reading right when clocking in/out (the one from when the
   // screen opened may be stale). Falls back to the last known reading.
-  const freshFix = async () => {
+  const freshFix = async (timeoutMs = 15000) => {
     try {
-      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      const pos: any = await Promise.race([
+        Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), timeoutMs)),
+      ]);
       setLocation(pos.coords);
       return pos.coords;
     } catch {
@@ -140,9 +202,15 @@ export default function ClockScreen() {
       );
 
       setActiveRecord(record);
+      saveActive(record);
       Alert.alert('Clocked In', `You're clocked in at ${selectedSite.name}.`);
     } catch (error: any) {
       const status = error.response?.status;
+      if (status === 400 && /already clocked in/i.test(error.response?.data?.detail || '')) {
+        await refreshActive();
+        Alert.alert('Already clocked in', 'You still have a shift open. Clock out first, then clock in again.');
+        return;
+      }
       const title = status === 423 ? 'Site Shut Down' : status === 403 ? "Can't Clock In" : 'Error';
       Alert.alert(title, error.response?.data?.detail || 'Failed to clock in. Check your connection.');
     } finally {
@@ -150,16 +218,12 @@ export default function ClockScreen() {
     }
   };
 
+  // Clock out never waits on GPS: it uses a location if one comes within a few seconds and
+  // otherwise clocks out without one (the office sees it flagged).
   const handleClockOut = async () => {
-    if (!location) {
-      Alert.alert('Error', 'Getting your location, please wait...');
-      await requestLocationPermission();
-      return;
-    }
-
     Alert.alert(
       'Clock Out',
-      'Are you sure you want to clock out?',
+      activeRecord ? `Clock out of ${activeRecord.site_name}?` : 'Clock out of your current shift?',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -168,16 +232,23 @@ export default function ClockScreen() {
           onPress: async () => {
             setActionLoading(true);
             try {
-              const fix = (await freshFix()) || location;
-              await clockService.clockOut(
-                { latitude: fix.latitude, longitude: fix.longitude },
-                fix.accuracy,
+              const fix = (await freshFix(6000)) || location;
+              const done = await clockService.clockOut(
+                fix ? { latitude: fix.latitude, longitude: fix.longitude } : null,
+                fix?.accuracy,
               );
-              
               setActiveRecord(null);
-              Alert.alert('Success', 'Clocked out successfully!');
+              saveActive(null);
+              Alert.alert('Clocked Out', done?.total_hours != null ? `Shift recorded: ${done.total_hours} h.` : 'Clocked out successfully.');
             } catch (error: any) {
-              Alert.alert('Error', error.response?.data?.detail || 'Failed to clock out');
+              if (error.response?.status === 400) {
+                await refreshActive();
+                Alert.alert('Not clocked in', "You don't have a shift open, so there's nothing to clock out of. If that's wrong, tell your foreman or PM.");
+              } else if (!error.response) {
+                Alert.alert("Can't reach the server", 'Check your signal and try again. Your shift stays open until the clock-out goes through.');
+              } else {
+                Alert.alert('Error', error.response?.data?.detail || 'Failed to clock out');
+              }
             } finally {
               setActionLoading(false);
             }
@@ -211,8 +282,9 @@ export default function ClockScreen() {
             <Text style={styles.statusTitle}>Currently Clocked In</Text>
             <Text style={styles.statusSite}>{activeRecord.site_name}</Text>
             <Text style={styles.statusTime}>
-              Since {format(new Date(activeRecord.clock_in), 'h:mm a')}
+              Since {format(utc(activeRecord.clock_in), utc(activeRecord.clock_in).toDateString() === new Date().toDateString() ? 'h:mm a' : 'EEE MMM d, h:mm a')}
             </Text>
+            {!statusKnown ? <Text style={styles.statusTime}>Offline: showing your last known shift</Text> : null}
             {activeRecord.task_title ? <Text style={styles.statusTime}>Working on: {activeRecord.task_title}</Text> : null}
           </View>
         ) : (
@@ -274,6 +346,8 @@ export default function ClockScreen() {
           </View>
         ) : null}
 
+        <LocationPrompt onGranted={requestLocationPermission} />
+
         {/* Location Status */}
         <View style={styles.locationCard}>
           <MaterialIcons
@@ -320,6 +394,17 @@ export default function ClockScreen() {
             )}
           </TouchableOpacity>
         )}
+        {!activeRecord ? (
+          <TouchableOpacity
+            style={[styles.actionButton, styles.clockOutSecondary]}
+            onPress={handleClockOut}
+            disabled={actionLoading}
+            accessibilityHint="Ends your current shift if one is open"
+          >
+            <MaterialIcons name="exit-to-app" size={22} color={COLORS.error} />
+            <Text style={[styles.buttonText, { color: COLORS.error }]}>Clock Out</Text>
+          </TouchableOpacity>
+        ) : null}
 
         <Footer />
       </ScrollView>
@@ -501,6 +586,12 @@ const styles = StyleSheet.create({
   },
   clockInButton: {
     backgroundColor: COLORS.success,
+  },
+  clockOutSecondary: {
+    backgroundColor: COLORS.white,
+    borderWidth: 2,
+    borderColor: COLORS.error,
+    marginTop: 12,
   },
   clockOutButton: {
     backgroundColor: COLORS.error,

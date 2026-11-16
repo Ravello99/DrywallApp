@@ -18,7 +18,7 @@ import { useAuthStore } from '../src/store/authStore';
 import { MaterialIcons } from '@expo/vector-icons';
 import { COLORS } from '../src/constants/colors';
 import Footer from '../src/components/Footer';
-import { resolveSession, homeFor, clearSessionCache } from '../src/services/session';
+import { resolveSession, landingFor, clearSessionCache } from '../src/services/session';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -39,7 +39,7 @@ export default function LoginScreen() {
       const u = await resolveSession(true);
       if (u) {
         setUser(u);
-        setHome(homeFor(u.role));
+        setHome(landingFor(u));
       }
     } catch (error) {
       console.error('Auth check error:', error);
@@ -60,7 +60,7 @@ export default function LoginScreen() {
       const { user } = await authService.login(email.trim(), password);
       setUser(user);
       clearSessionCache();
-      router.replace(homeFor(user.role));
+      router.replace(landingFor(user) as any);
     } catch (error: any) {
       const detail = error.response?.data?.detail;
       const msg = !error.response
@@ -131,6 +131,10 @@ export default function LoginScreen() {
             </View>
 
             {loginError ? <Text style={styles.errorText}>{loginError}</Text> : null}
+
+            <TouchableOpacity onPress={() => router.push({ pathname: '/forgot-password', params: email ? { email: email.trim() } : {} } as any)} style={{ alignSelf: 'flex-end', paddingVertical: 8, marginBottom: 8 }}>
+              <Text style={{ color: COLORS.primary, fontWeight: '600' }}>Forgot password?</Text>
+            </TouchableOpacity>
 
             <TouchableOpacity
               style={[styles.button, loading && styles.buttonDisabled]}

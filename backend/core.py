@@ -152,6 +152,7 @@ class UserResponse(UserBase, UserProfileFields):
     id: str
     assigned_sites: List[str] = Field(default_factory=list)
     created_at: datetime
+    must_change_password: bool = False
 
     class Config:
         populate_by_name = True
@@ -177,6 +178,7 @@ def user_out(u: dict, viewer: Optional[dict] = None) -> UserResponse:
         hire_date=u.get("hire_date"),
         pay_rate=u.get("pay_rate") if can_see_pay else None,
         active=u.get("active", True),
+        must_change_password=bool(u.get("must_change_password")),
     )
 
 
@@ -271,7 +273,9 @@ class ClockInRequest(BaseModel):
 
 
 class ClockOutRequest(BaseModel):
-    location: LocationModel
+    # Optional so nobody is ever stuck clocked in because their phone can't get a GPS fix;
+    # clock-outs without a location are flagged for the office to review.
+    location: Optional[LocationModel] = None
     accuracy_m: Optional[float] = None
 
 
@@ -282,7 +286,7 @@ class ClockRecordResponse(BaseModel):
     site_id: str
     site_name: str
     clock_in: datetime
-    clock_in_location: LocationModel
+    clock_in_location: Optional[LocationModel] = None
     clock_out: Optional[datetime] = None
     clock_out_location: Optional[LocationModel] = None
     total_hours: Optional[float] = None
@@ -295,6 +299,8 @@ class ClockRecordResponse(BaseModel):
     auto_clock_out_reason: Optional[str] = None
     task_id: Optional[str] = None
     task_title: Optional[str] = None
+    edited: bool = False
+    edited_by_name: Optional[str] = None
 
 
 class SafetyDocumentCreate(BaseModel):
@@ -491,7 +497,28 @@ def create_access_token(data: dict):
     return encoded_jwt
 
 
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+def token_for(user: dict) -> str:
+    """Login token. Carries the password version, so changing or resetting a password signs
+    out every other device that still has an old token."""
+    return create_access_token(data={"sub": str(user["_id"]), "pwv": int(user.get("pw_version") or 0)})
+
+
+def password_problem(password: str, user: Optional[dict] = None) -> Optional[str]:
+    if len(password or "") < 8:
+        return "Use at least 8 characters"
+    if password.isdigit() or password.isalpha():
+        return "Use a mix of letters and numbers"
+    if user and password.strip().lower() in (str(user.get("email", "")).lower(), str(user.get("name", "")).lower()):
+        return "Don't use your name or email as your password"
+    return None
+
+
+PASSWORD_CHANGE_REQUIRED = "Please set a new password before continuing."
+
+
+async def get_signed_in_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """The signed-in user, even if they still have to set a new password (only for /auth/me and
+    changing the password). Everything else uses get_current_user."""
     token = credentials.credentials
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
@@ -504,7 +531,16 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     user = await db.users.find_one({"_id": ObjectId(user_id)})
     if user is None:
         raise HTTPException(status_code=401, detail="User not found")
-    
+    if int(payload.get("pwv") or 0) != int(user.get("pw_version") or 0):
+        raise HTTPException(status_code=401, detail="Your password was changed. Please sign in again.")
+    if user.get("active") is False:
+        raise HTTPException(status_code=401, detail="This account has been deactivated")
+    return user
+
+
+async def get_current_user(user: dict = Depends(get_signed_in_user)):
+    if user.get("must_change_password"):
+        raise HTTPException(status_code=403, detail=PASSWORD_CHANGE_REQUIRED)
     return user
 
 

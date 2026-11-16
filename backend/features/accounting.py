@@ -15,7 +15,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 import logic as L
-from core import ACCOUNTING_ROLES, db, make_link_token, read_link_token, require_roles
+from core import ACCOUNTING_ROLES, ROLE_PM, db, make_link_token, read_link_token, require_roles
 
 router = APIRouter(prefix="/api/accounting", tags=["accounting"])
 
@@ -155,7 +155,10 @@ async def overview(week_start: Optional[str] = Query(None),
         if week_pay:
             paid_week.append({**d, "paid_this_week": round(sum(p["amount"] for p in week_pay), 2)})
     outstanding.sort(key=lambda d: (-(d["overdue_days"] or 0), d.get("due_date") or ""))
+    from features.expenses import summary as expense_summary
+    expenses = await expense_summary(a, b, current_user)
     return {
+        "expenses": expenses,
         "week": {"start": a, "end": b, "today": today.isoformat(),
                  "overtime_after_hours": threshold, "overtime_multiplier": mult},
         "labour": {**labour, "warnings": warnings},
@@ -174,20 +177,23 @@ async def overview(week_start: Optional[str] = Query(None),
 
 # --------------------------------------------------------------------------- downloads
 class ExportIn(BaseModel):
-    kind: str = "hours"                 # hours | draws
+    kind: str = "hours"                 # hours | draws | expenses
     start: Optional[str] = None
     end: Optional[str] = None
     site_id: Optional[str] = None       # hours for one job only
     user_id: Optional[str] = None       # hours for one employee only
     format: str = "xlsx"                # xlsx (one workbook, a tab per job and employee) | zip
+                                        # (expenses: zip = workbook + every receipt photo)
 
 
 @router.post("/export-link")
-async def export_link(body: ExportIn, current_user: dict = Depends(require_roles(*ACCOUNTING_ROLES))):
-    if body.kind not in ("hours", "draws") or body.format not in ("xlsx", "zip"):
+async def export_link(body: ExportIn, current_user: dict = Depends(require_roles(*ACCOUNTING_ROLES, ROLE_PM))):
+    if body.kind not in ("hours", "draws", "expenses") or body.format not in ("xlsx", "zip"):
         raise HTTPException(status_code=400, detail="Unknown download type")
+    if current_user.get("role") == ROLE_PM and body.kind != "expenses":
+        raise HTTPException(status_code=403, detail="You don't have permission to do that.")
     start, end = L.parse_date(body.start), L.parse_date(body.end)
-    if body.kind == "hours":
+    if body.kind in ("hours", "expenses"):
         if not start or not end:
             raise HTTPException(status_code=400, detail="Choose a start and end date")
         if end < start:
@@ -206,6 +212,12 @@ async def export(token: str = Query(...)):
     if c.get("kind") == "draws":
         data = await draws_workbook()
         return _file(data, "vanguard_invoice_register_%s.xlsx" % stamp, XLSX)
+    if c.get("kind") == "expenses":
+        label = "%s_to_%s" % (c["start"], c["end"])
+        book, rows = await expenses_workbook(c["start"], c["end"], c.get("site_id"))
+        if c.get("format") == "zip":
+            return _file(await expenses_zip(book, rows, label), "vanguard_receipts_%s.zip" % label, "application/zip")
+        return _file(book, "vanguard_expenses_%s.xlsx" % label, XLSX)
     start, end = L.parse_date(c["start"]), L.parse_date(c["end"])
     entries = await payroll_entries(start, end, c.get("site_id"), c.get("user_id"))
     label = "%s_to_%s" % (start.isoformat(), end.isoformat())
@@ -410,4 +422,93 @@ async def draws_workbook() -> bytes:
     _widths(ws)
     buf = io.BytesIO()
     wb.save(buf)
+    return buf.getvalue()
+
+
+# --------------------------------------------------------------------------- expenses
+EXPENSE_HEADERS = ["Date", "Job", "Vendor", "Category", "Subtotal", "Tax", "Total", "Paid with", "Status",
+                   "Submitted by", "Notes", "Receipt file"]
+
+
+def _receipt_name(e: dict, ext: str = "jpg") -> str:
+    return "%s_%s_%s_%.2f_%s.%s" % (e["date"], _file_name(e["site_name"])[:30], _file_name(e["vendor"])[:30],
+                                    e["amount"], e["id"][-6:], ext)
+
+
+async def expenses_workbook(start: str, end: str, site_id: Optional[str] = None):
+    """Expense register plus totals by job and by category. Returns (xlsx bytes, rows)."""
+    from openpyxl import Workbook
+    from features.expenses import expenses_for_export
+    rows = await expenses_for_export(start, end, site_id)
+    st = _styles()
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Expenses"
+    period = "%s to %s" % (start, end)
+    r = _title(ws, "Receipts and expenses", period + "  ·  rejected receipts are listed but not totalled elsewhere", st)
+    last = _table(ws, EXPENSE_HEADERS, [[L.parse_date(e["date"]), e["site_name"], e["vendor"], e["category_label"],
+                                         e["subtotal"], e["tax"] or 0, e["amount"], e["paid_with_label"],
+                                         e["status"], e["submitted_by_name"], e["notes"] or "",
+                                         _receipt_name(e) if e["has_receipt"] else ""] for e in rows],
+                  st, ["Subtotal", "Tax", "Total"], start_row=r)
+    for col in (5, 6, 7):
+        for row in range(r + 1, last + 1):
+            ws.cell(row=row, column=col).number_format = '"$"#,##0.00'
+    for row in range(r + 1, last + 1):
+        ws.cell(row=row, column=1).number_format = "yyyy-mm-dd"
+    _widths(ws)
+
+    counted = [e for e in rows if e["status"] != "rejected"]
+    ws = wb.create_sheet("By job")
+    totals = {}
+    for e in counted:
+        t = totals.setdefault(e["site_name"], [0, 0.0, 0.0])
+        t[0] += 1
+        t[1] += e["subtotal"]
+        t[2] += e["amount"]
+    last = _table(ws, ["Job", "Receipts", "Subtotal", "Total"],
+                  [[k, v[0], round(v[1], 2), round(v[2], 2)] for k, v in sorted(totals.items(), key=lambda x: -x[1][2])],
+                  st, ["Receipts", "Subtotal", "Total"], start_row=1)
+    for col in (3, 4):
+        for row in range(2, last + 1):
+            ws.cell(row=row, column=col).number_format = '"$"#,##0.00'
+    _widths(ws)
+
+    ws = wb.create_sheet("By category")
+    cats = {}
+    for e in counted:
+        cats[e["category_label"]] = cats.get(e["category_label"], 0) + e["amount"]
+    last = _table(ws, ["Category", "Total"], [[k, round(v, 2)] for k, v in sorted(cats.items(), key=lambda x: -x[1])],
+                  st, ["Total"], start_row=1)
+    for row in range(2, last + 1):
+        ws.cell(row=row, column=2).number_format = '"$"#,##0.00'
+    _widths(ws)
+
+    reimb = [e for e in rows if e["paid_with"] == "personal" and e["status"] in ("approved", "reimbursed")]
+    if reimb:
+        ws = wb.create_sheet("Reimbursements")
+        last = _table(ws, ["Person", "Date", "Vendor", "Job", "Total", "Status"],
+                      [[e["submitted_by_name"], L.parse_date(e["date"]), e["vendor"], e["site_name"], e["amount"],
+                        "reimbursed" if e["status"] == "reimbursed" else "to reimburse"] for e in reimb],
+                      st, ["Total"], start_row=1)
+        for row in range(2, last + 1):
+            ws.cell(row=row, column=5).number_format = '"$"#,##0.00'
+            ws.cell(row=row, column=2).number_format = "yyyy-mm-dd"
+        _widths(ws)
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue(), rows
+
+
+async def expenses_zip(book: bytes, rows: list, label: str) -> bytes:
+    """The workbook plus every receipt, in Receipts/<job>/ named date_job_vendor_amount."""
+    from features.expenses import receipt_file
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("Expenses_%s.xlsx" % label, book)
+        for e in rows:
+            f = await receipt_file(e["id"])
+            if f:
+                ext, data = f
+                z.writestr("Receipts/%s/%s" % (_file_name(e["site_name"]), _receipt_name(e, ext)), data)
     return buf.getvalue()

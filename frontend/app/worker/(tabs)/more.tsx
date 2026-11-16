@@ -13,6 +13,7 @@ export default function WorkerMore() {
         links={[
           { label: 'Crew Safety', sub: 'Expired / expiring documents on your sites', icon: 'health-and-safety', href: '/worker/crew-safety', show: foreman },
           { label: 'RFIs', sub: 'Ask the PM a question and track the answer', icon: 'help-outline', href: '/worker/rfis', show: foreman },
+          { label: 'Receipts', sub: 'Snap a receipt for materials or supplies', icon: 'receipt-long', href: '/worker/expenses', show: foreman },
           { label: 'Forms', sub: foreman ? 'Fill out forms or send them to your crew' : 'Forms to fill out', icon: 'description', href: '/worker/forms' },
           { label: 'My Hours', sub: 'Hours per week and history', icon: 'timer', href: '/worker/hours' },
           { label: 'Safety Documents', sub: 'Upload and renew your certificates', icon: 'security', href: '/worker/safety' },

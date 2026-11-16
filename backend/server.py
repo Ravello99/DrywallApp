@@ -38,12 +38,11 @@ async def login(login_data: LoginRequest):
         raise HTTPException(status_code=401, detail="Incorrect email or password")
     if user.get("active") is False:
         raise HTTPException(status_code=403, detail="This account has been deactivated")
-    access_token = create_access_token(data={"sub": str(user["_id"])})
-    return Token(access_token=access_token, token_type="bearer", user=user_out(user, user))
+    return Token(access_token=token_for(user), token_type="bearer", user=user_out(user, user))
 
 
 @api_router.get("/auth/me", response_model=UserResponse)
-async def get_me(current_user: dict = Depends(get_current_user)):
+async def get_me(current_user: dict = Depends(get_signed_in_user)):
     return user_out(current_user, current_user)
 
 
@@ -70,6 +69,7 @@ async def create_user(user_data: UserCreate, current_user: dict = Depends(get_cu
     if len(data["password"]) < 8:
         raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
     data["password"] = get_password_hash(data["password"])
+    data["must_change_password"] = True     # the person sets their own password on first sign-in
     data["created_at"] = datetime.utcnow()
     data["active"] = True if data.get("active") is None else data["active"]
     data["specialties"] = data.get("specialties") or []
@@ -94,6 +94,9 @@ async def update_user(user_id: str, user_data: UserUpdate, current_user: dict = 
         if len(update["password"]) < 8:
             raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
         update["password"] = get_password_hash(update["password"])
+        if str(target["_id"]) != str(current_user["_id"]):
+            update["must_change_password"] = True
+            update["pw_version"] = int(target.get("pw_version") or 0) + 1
     if update.get("role") in OFFICE_ROLES:
         update["assigned_sites"] = []
     if update:
@@ -338,21 +341,23 @@ async def clock_out(clock_data: ClockOutRequest, current_user: dict = Depends(ge
     out_site = await db.sites.find_one({"_id": ObjectId(active_record["site_id"])}) \
         if ObjectId.is_valid(active_record["site_id"]) else None
     out_dist = None
-    if out_site and out_site.get("location"):
-        out_dist = round(distance_m(out_site["location"], clock_data.location.model_dump()))
+    out_loc = clock_data.location.model_dump() if clock_data.location else None
+    if out_site and out_site.get("location") and out_loc:
+        out_dist = round(distance_m(out_site["location"], out_loc))
     total_hours = (clock_out_time - clock_in_time).total_seconds() / 3600
-    
-    await db.clock_records.update_one(
-        {"_id": active_record["_id"]},
-        {"$set": {
-            "clock_out": clock_out_time,
-            "clock_out_location": clock_data.location.model_dump(),
-            "total_hours": round(total_hours, 2),
-            "status": "clocked_out",
-            "synced": True,
-            "clock_out_distance_m": out_dist,
-        }}
-    )
+    update = {
+        "clock_out": clock_out_time,
+        "clock_out_location": out_loc,
+        "total_hours": round(total_hours, 2),
+        "status": "clocked_out",
+        "synced": True,
+        "clock_out_distance_m": out_dist,
+    }
+    if not out_loc:
+        update["flagged"] = True
+        update["flag_reason"] = "; ".join(x for x in [active_record.get("flag_reason"),
+                                                      "Clocked out without a location"] if x)
+    await db.clock_records.update_one({"_id": active_record["_id"]}, {"$set": update})
     
     updated_record = await db.clock_records.find_one({"_id": active_record["_id"]})
     updated_record["id"] = str(updated_record.pop("_id"))
@@ -387,7 +392,7 @@ async def get_my_records(current_user: dict = Depends(get_current_user)):
         site_id=r["site_id"],
         site_name=r["site_name"],
         clock_in=r["clock_in"],
-        clock_in_location=LocationModel(**r["clock_in_location"]),
+        clock_in_location=LocationModel(**r["clock_in_location"]) if r.get("clock_in_location") else None,
         clock_out=r.get("clock_out"),
         clock_out_location=LocationModel(**r["clock_out_location"]) if r.get("clock_out_location") else None,
         total_hours=r.get("total_hours"),
@@ -426,7 +431,7 @@ async def get_all_records(
         site_id=r["site_id"],
         site_name=r["site_name"],
         clock_in=r["clock_in"],
-        clock_in_location=LocationModel(**r["clock_in_location"]),
+        clock_in_location=LocationModel(**r["clock_in_location"]) if r.get("clock_in_location") else None,
         clock_out=r.get("clock_out"),
         clock_out_location=LocationModel(**r["clock_out_location"]) if r.get("clock_out_location") else None,
         total_hours=r.get("total_hours"),
@@ -1159,6 +1164,10 @@ async def startup_event():
         await db[coll].create_index([("site_id", 1), ("status", 1)])
     await db.bids.create_index([("status", 1), ("due_date", 1)])
     await db.bids.create_index("email_message_id", sparse=True)
+    await db.expenses.create_index([("date", -1)])
+    await db.expenses.create_index([("submitted_by", 1), ("status", 1)])
+    await db.expense_receipts.create_index("expense_id")
+    await db.clock_records.create_index([("status", 1), ("clock_in", 1)])
 
     from features.notifications import start_background_jobs
     start_background_jobs()
@@ -1187,11 +1196,11 @@ async def startup_event():
 # Include routers. Feature routers must come before the web-app catch-all below.
 app.include_router(api_router)
 
-from features import (accounting, bids, change_orders, field, invoices, manpower, materials,  # noqa: E402
-                      notifications, projects, public, rfis, tasks)
+from features import (account, accounting, bids, change_orders, expenses, field, invoices,  # noqa: E402
+                      manpower, materials, notifications, projects, public, rfis, tasks, timeclock)
 
 for _module in (tasks, projects, materials, manpower, rfis, change_orders, invoices, bids, notifications, field,
-                public, accounting):
+                public, accounting, account, timeclock, expenses):
     app.include_router(_module.router)
 
 

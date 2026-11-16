@@ -27,6 +27,8 @@ def _match_cond(val, cond):
                 if val is None or not val > arg: return False
             elif op == "$gte":
                 if val is None or not val >= arg: return False
+            elif op == "$lte":
+                if val is None or not val <= arg: return False
             elif op == "$lt":
                 if val is None or not val < arg: return False
             elif op == "$regex":

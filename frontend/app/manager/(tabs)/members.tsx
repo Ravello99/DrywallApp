@@ -315,6 +315,32 @@ export default function MembersScreen() {
     }
   };
 
+  const canResetPasswords = ['admin', 'project_manager', 'project_coordinator'].includes(me?.role || '');
+
+  const handleResetPassword = (member: User) => {
+    Alert.alert(
+      'Reset password',
+      `Give ${member.name} a temporary password? Their current password stops working and they'll choose a new one when they sign in.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reset',
+          onPress: async () => {
+            try {
+              const r = await userService.resetPassword(member.id);
+              Alert.alert(
+                'Temporary password',
+                `${r.user_name} (${r.email})\n\nTemporary password:\n${r.temporary_password}\n\nGive this to them by phone or text. It's only shown now. They'll be asked to choose their own password after signing in.`,
+              );
+            } catch (error: any) {
+              Alert.alert('Error', errorText(error, 'Could not reset the password'));
+            }
+          },
+        },
+      ],
+    );
+  };
+
   const handleDeleteMember = (member: User) => {
     Alert.alert(
       'Delete Member',
@@ -635,6 +661,15 @@ export default function MembersScreen() {
                   >
                     <MaterialIcons name="edit" size={20} color={COLORS.info} />
                   </TouchableOpacity>
+                  {canResetPasswords && member.role !== 'admin' || me?.role === 'admin' ? (
+                    <TouchableOpacity
+                      style={styles.actionBtn}
+                      onPress={() => handleResetPassword(member)}
+                      accessibilityLabel={`Reset password for ${member.name}`}
+                    >
+                      <MaterialIcons name="lock-reset" size={20} color={COLORS.accentDark} />
+                    </TouchableOpacity>
+                  ) : null}
                   <TouchableOpacity
                     style={styles.actionBtn}
                     onPress={() => handleDeleteMember(member)}
@@ -691,6 +726,15 @@ export default function MembersScreen() {
                   >
                     <MaterialIcons name="edit" size={20} color={COLORS.info} />
                   </TouchableOpacity>
+                  {canResetPasswords && member.role !== 'admin' || me?.role === 'admin' ? (
+                    <TouchableOpacity
+                      style={styles.actionBtn}
+                      onPress={() => handleResetPassword(member)}
+                      accessibilityLabel={`Reset password for ${member.name}`}
+                    >
+                      <MaterialIcons name="lock-reset" size={20} color={COLORS.accentDark} />
+                    </TouchableOpacity>
+                  ) : null}
                   <TouchableOpacity
                     style={styles.actionBtn}
                     onPress={() => handleDeleteMember(member)}

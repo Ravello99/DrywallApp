@@ -36,7 +36,11 @@ export default function MoreMenu({ links }: { links: MoreLink[] }) {
     router.replace('/');
   };
 
-  const all: MoreLink[] = [{ label: 'Notifications', icon: 'notifications', href: `${base}/notifications`, sub: unread ? `${unread} unread` : undefined }, ...links];
+  const all: MoreLink[] = [
+    { label: 'Notifications', icon: 'notifications', href: `${base}/notifications`, sub: unread ? `${unread} unread` : undefined },
+    ...links,
+    { label: 'Change password', icon: 'password', href: '/change-password' },
+  ];
 
   return (
     <ScrollView contentContainerStyle={ui.pad}>

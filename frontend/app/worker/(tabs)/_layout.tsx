@@ -6,12 +6,15 @@ import { Tabs } from 'expo-router';
 import { COLORS } from '../../../src/constants/colors';
 import BrandTabBar from '../../../src/components/BrandTabBar';
 import { useAuthStore } from '../../../src/store/authStore';
+import LocationPrompt from '../../../src/components/LocationPrompt';
 
 export default function WorkerTabs() {
   const { user } = useAuthStore();
   const isForeman = user?.role === 'foreman';
 
   return (
+    <>
+    <LocationPrompt mode="modal" />
     <Tabs
       tabBar={() => (
         <BrandTabBar
@@ -40,5 +43,6 @@ export default function WorkerTabs() {
       <Tabs.Screen name="requests" options={{ title: 'Requests' }} />
       <Tabs.Screen name="more" options={{ title: 'More' }} />
     </Tabs>
+    </>
   );
 }

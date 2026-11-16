@@ -16,7 +16,7 @@ export const clockService = {
     return response.data;
   },
 
-  async clockOut(location: { latitude: number; longitude: number }, accuracyM?: number | null) {
+  async clockOut(location: { latitude: number; longitude: number } | null, accuracyM?: number | null) {
     const response = await api.post('/clock/out', { location, accuracy_m: accuracyM ?? null });
     return response.data;
   },

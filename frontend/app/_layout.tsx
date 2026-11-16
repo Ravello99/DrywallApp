@@ -15,6 +15,9 @@ export default function RootLayout() {
         <Stack.Screen name="index" />
         <Stack.Screen name="manager" />
         <Stack.Screen name="worker" />
+        <Stack.Screen name="forgot-password" />
+        <Stack.Screen name="reset-password" />
+        <Stack.Screen name="change-password" />
       </Stack>
     </SafeAreaProvider>
   );

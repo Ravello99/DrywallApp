@@ -51,16 +51,45 @@ const storage = {
   }
 };
 
+// The password typed at sign-in, kept in memory only (never saved), so someone who must set a
+// new password right after signing in with a temporary one doesn't have to type it twice.
+let justSignedInWith: string | null = null;
+
+async function saveSession(data: { access_token: string; user: any }) {
+  await storage.setItem('token', data.access_token);
+  await storage.setItem('user', JSON.stringify(data.user));
+  return { token: data.access_token, user: data.user };
+}
+
 export const authService = {
   async login(email: string, password: string) {
     const response = await api.post('/auth/login', { email, password });
-    const { access_token, user } = response.data;
-    await storage.setItem('token', access_token);
-    await storage.setItem('user', JSON.stringify(user));
-    return { token: access_token, user };
+    justSignedInWith = response.data.user?.must_change_password ? password : null;
+    return saveSession(response.data);
+  },
+
+  signInPassword() {
+    return justSignedInWith;
+  },
+
+  async changePassword(currentPassword: string, newPassword: string) {
+    const response = await api.post('/auth/change-password', { current_password: currentPassword, new_password: newPassword });
+    justSignedInWith = null;
+    return saveSession(response.data);
+  },
+
+  async forgotPassword(email: string): Promise<{ ok: boolean; email_enabled: boolean }> {
+    const response = await api.post('/auth/forgot-password', { email });
+    return response.data;
+  },
+
+  async resetPassword(token: string, newPassword: string) {
+    const response = await api.post('/auth/reset-password', { token, new_password: newPassword });
+    return saveSession(response.data);
   },
 
   async logout() {
+    justSignedInWith = null;
     await storage.removeItem('token');
     await storage.removeItem('user');
     await storage.clear();

@@ -4,7 +4,7 @@
 import { authService, storage } from './authService';
 import { isOfficeRole } from '../constants/roles';
 
-export type SessionUser = { id: string; email: string; name: string; role: string; assigned_sites: string[] };
+export type SessionUser = { id: string; email: string; name: string; role: string; assigned_sites: string[]; must_change_password?: boolean };
 
 let cached: { user: SessionUser | null; at: number } | null = null;
 
@@ -39,4 +39,10 @@ export function clearSessionCache() {
 /** Where a signed-in user belongs. */
 export function homeFor(role?: string | null): '/manager' | '/worker' {
   return isOfficeRole(role) ? '/manager' : '/worker';
+}
+
+/** Like homeFor, but someone who still has to set their own password goes there first. */
+export function landingFor(user?: { role?: string | null; must_change_password?: boolean } | null): string {
+  if (user?.must_change_password) return '/change-password';
+  return homeFor(user?.role);
 }

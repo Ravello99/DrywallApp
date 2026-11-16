@@ -899,6 +899,11 @@ def main() -> None:
     if state.get("domain"):
         info("The app's web address: https://%s" % state["domain"])
     backend_url = write_frontend_env(host)
+    # The backend uses this for links it sends out (password reset emails).
+    be = read_env(BACKEND / ".env")
+    if be.get("PUBLIC_APP_URL") != backend_url:
+        be["PUBLIC_APP_URL"] = backend_url
+        write_env(BACKEND / ".env", be, "Created by run.py. Keep this file private; it is not committed to git.")
     ensure_backend_deps(base_python)
     ensure_frontend_deps(env)
     build_web(env, backend_url)
