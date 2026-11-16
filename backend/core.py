@@ -107,6 +107,7 @@ OFFICE_ROLES = {ROLE_ADMIN, ROLE_COORDINATOR, ROLE_ESTIMATOR, ROLE_PM}
 FIELD_ROLES = {ROLE_FOREMAN, ROLE_EMPLOYEE}
 PAY_RATE_VIEWERS = {ROLE_ADMIN, ROLE_PM, ROLE_COORDINATOR}   # who may see/edit pay rates
 SHUTDOWN_ROLES = {ROLE_ADMIN, ROLE_COORDINATOR, ROLE_PM}     # who may shut a job site down
+ACCOUNTING_ROLES = {ROLE_ADMIN, ROLE_COORDINATOR}             # accounting section: payroll, A/R, exports
 
 # Roles from the Oakdale app, mapped on startup. Old crew levels become the "level" field.
 LEGACY_ROLES = {"manager": (ROLE_ADMIN, None), "apprentice": (ROLE_EMPLOYEE, "apprentice"),
@@ -463,6 +464,23 @@ def verify_password(plain_password, hashed_password):
 
 def get_password_hash(password):
     return pwd_context.hash(password)
+
+
+def make_link_token(purpose: str, claims: dict, minutes: int = 30) -> str:
+    """Short-lived signed token for a link that opens without signing in (printable invoice,
+    file downloads). Tied to one purpose so it can't be used as a login."""
+    return jwt.encode({**claims, "purpose": purpose, "exp": datetime.utcnow() + timedelta(minutes=minutes)},
+                      SECRET_KEY, algorithm=ALGORITHM)
+
+
+def read_link_token(token: str, purpose: str) -> dict:
+    try:
+        claims = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    except JWTError:
+        raise HTTPException(status_code=401, detail="This link has expired. Open it again from the app.")
+    if claims.get("purpose") != purpose:
+        raise HTTPException(status_code=401, detail="This link isn't valid.")
+    return claims
 
 
 def create_access_token(data: dict):

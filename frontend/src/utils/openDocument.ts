@@ -6,8 +6,9 @@ import * as WebBrowser from 'expo-web-browser';
 import { API_URL } from '../services/api';
 import { apiError } from '../services/pmService';
 
-export async function openServerDocument(getPath: () => Promise<{ url: string }>) {
-  const tab = Platform.OS === 'web' && typeof window !== 'undefined' ? window.open('', '_blank') : null;
+// download: the server sends a file (Excel / ZIP); on web it downloads without opening a tab.
+export async function openServerDocument(getPath: () => Promise<{ url: string }>, opts: { download?: boolean } = {}) {
+  const tab = Platform.OS === 'web' && typeof window !== 'undefined' && !opts.download ? window.open('', '_blank') : null;
   try {
     const { url } = await getPath();
     const full = `${API_URL}${url}`;

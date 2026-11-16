@@ -120,6 +120,29 @@ def test_ranges_overlap():
     assert not L.ranges_overlap(d(2026, 1, 1), d(2026, 1, 9), d(2026, 1, 10), d(2026, 1, 12))
 
 
+def test_split_overtime():
+    from datetime import datetime, timedelta
+    base = datetime(2026, 11, 9, 12)
+    recs = []
+    for day in range(5):   # 5 x 10 h = 50 h: 44 regular, 6 overtime, all on the last shift
+        recs.append({"user_id": "u1", "user_name": "Ed", "site_id": "A" if day < 4 else "B", "site_name": "A",
+                     "clock_in": base + timedelta(days=day), "total_hours": 10, "pay_rate": 40, "clock_out": base})
+    recs.append({"user_id": "u2", "user_name": "Ann", "site_id": "A", "site_name": "A", "clock_in": base,
+                 "total_hours": 8, "pay_rate": None, "clock_out": base})
+    out = L.split_overtime(recs)
+    ed = [e for e in out if e["user_id"] == "u1"]
+    assert sum(e["regular_hours"] for e in ed) == 44 and sum(e["overtime_hours"] for e in ed) == 6
+    last = max(ed, key=lambda e: e["clock_in"])
+    assert last["site_id"] == "B" and last["regular_hours"] == 4 and last["overtime_hours"] == 6
+    assert last["pay"] == 4 * 4000 + 6 * 6000
+    s = L.summarize_payroll(out)
+    assert s["totals"]["hours"] == 58 and s["totals"]["pay"] == 44 * 4000 + 6 * 6000
+    b = [x for x in s["by_site"] if x["site_id"] == "B"][0]
+    assert b["overtime_hours"] == 6 and b["pay"] == 52000
+    ann = [u for u in s["by_user"] if u["user_id"] == "u2"][0]
+    assert ann["missing_rate"] and ann["pay"] == 0
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):

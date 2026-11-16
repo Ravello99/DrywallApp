@@ -72,6 +72,12 @@ export const changeOrderApi = {
   remove: (id: string) => del(`/change-orders/${id}`),
 };
 
+export const accountingApi = {
+  overview: (weekStart?: string) => get('/accounting/overview', weekStart ? { week_start: weekStart } : {}),
+  exportLink: (data: { kind: 'hours' | 'draws'; start?: string; end?: string; site_id?: string; user_id?: string; format?: 'xlsx' | 'zip' }) =>
+    post('/accounting/export-link', data),
+};
+
 export const drawApi = {
   list: (params: Record<string, any> = {}) => get('/invoices', params),
   summary: () => get('/invoices/summary'),

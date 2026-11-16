@@ -132,6 +132,28 @@ COMPANY_GST_NUMBER=123456789 RT0001
 PAYMENT_TERMS_DAYS=30
 ```
 
+### Accounting
+
+**More → Accounting** (admin and project coordinators) has three parts:
+
+- **Labour & payroll:** each pay week's gross labour payout, by job and by employee, with regular
+  and overtime hours. Overtime is worked out per person per week and charged to the job it was
+  worked on. Warnings for missing pay rates, people still clocked in and flagged clock-ins.
+- **Progress draws:** outstanding, overdue, aging, holdback by job, drafts not sent, and what was
+  sent and paid this week.
+- **Downloads:** employee hours for any period, for everyone, one job or one employee, as one Excel
+  workbook (summaries plus a tab per job and per employee) or a ZIP with a file per job and per
+  employee; and the invoice register.
+
+Settings in `backend/.env` (defaults shown):
+
+```
+COMPANY_TIMEZONE=America/Toronto
+PAY_WEEK_START=0            # 0 = Monday ... 6 = Sunday
+OVERTIME_WEEKLY_HOURS=44    # Ontario ESA
+OVERTIME_MULTIPLIER=1.5
+```
+
 ## Tests
 
 ```bash

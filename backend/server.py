@@ -1187,11 +1187,11 @@ async def startup_event():
 # Include routers. Feature routers must come before the web-app catch-all below.
 app.include_router(api_router)
 
-from features import (bids, change_orders, field, invoices, manpower, materials,  # noqa: E402
+from features import (accounting, bids, change_orders, field, invoices, manpower, materials,  # noqa: E402
                       notifications, projects, public, rfis, tasks)
 
 for _module in (tasks, projects, materials, manpower, rfis, change_orders, invoices, bids, notifications, field,
-                public):
+                public, accounting):
     app.include_router(_module.router)
 
 

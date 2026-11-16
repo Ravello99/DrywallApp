@@ -9,12 +9,11 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse
-from jose import JWTError, jwt
 from pydantic import BaseModel, Field
 
 import logic as L
-from core import ALGORITHM, OFFICE_ROLES, ROLE_ADMIN, ROLE_COORDINATOR, ROLE_PM, SECRET_KEY, db, get_site_or_404, \
-    next_number, oid, out, require_roles
+from core import OFFICE_ROLES, ROLE_ADMIN, ROLE_COORDINATOR, ROLE_PM, db, get_site_or_404, make_link_token, \
+    next_number, oid, out, read_link_token, require_roles
 from features import invoice_doc
 
 router = APIRouter(prefix="/api/invoices", tags=["progress draws"])
@@ -270,18 +269,14 @@ async def document_link(inv_id: str, current_user: dict = Depends(require_roles(
     """A link to the printable invoice that works for 30 minutes without signing in, so it can be
     opened in a browser tab (or the phone's browser) and printed / saved as PDF."""
     inv = await _get(inv_id)
-    token = jwt.encode({"inv": str(inv["_id"]), "purpose": "invoice_doc",
-                        "exp": datetime.utcnow() + timedelta(minutes=DOC_TOKEN_MINUTES)}, SECRET_KEY, algorithm=ALGORITHM)
+    token = make_link_token("invoice_doc", {"inv": str(inv["_id"])}, DOC_TOKEN_MINUTES)
     return {"url": "/api/invoices/%s/document?token=%s" % (inv["_id"], token), "expires_minutes": DOC_TOKEN_MINUTES}
 
 
 @router.get("/{inv_id}/document", response_class=HTMLResponse)
 async def document(inv_id: str, token: str = Query(...)):
-    try:
-        claims = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-    except JWTError:
-        raise HTTPException(status_code=401, detail="This invoice link has expired. Open it again from the app.")
-    if claims.get("purpose") != "invoice_doc" or claims.get("inv") != inv_id:
+    claims = read_link_token(token, "invoice_doc")
+    if claims.get("inv") != inv_id:
         raise HTTPException(status_code=401, detail="This invoice link isn't valid.")
     inv = await _get(inv_id)
     return HTMLResponse(invoice_doc.render(inv), headers={"Cache-Control": "no-store", "X-Robots-Tag": "noindex"})

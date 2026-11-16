@@ -100,6 +100,78 @@ def labour_totals(records: Iterable[dict], now: Optional[datetime] = None) -> Tu
     return round(hours, 2), cost
 
 
+# --------------------------------------------------------------------------- weekly payroll
+
+OVERTIME_WEEKLY_HOURS = 44.0     # Ontario Employment Standards: overtime after 44 hours in a week
+OVERTIME_MULTIPLIER = 1.5
+
+
+def split_overtime(records: Iterable[dict], threshold: float = OVERTIME_WEEKLY_HOURS,
+                   multiplier: float = OVERTIME_MULTIPLIER, now: Optional[datetime] = None) -> List[dict]:
+    """One week of clock records -> the same records with hours, regular_hours, overtime_hours and
+    pay (cents) added. Overtime goes to whichever shifts come after the threshold, in clock-in order,
+    so the job the overtime was worked on carries its cost."""
+    so_far = {}
+    result = []
+    for r in sorted(records, key=lambda x: (x.get("user_id") or "", x.get("clock_in") or datetime.min)):
+        hours = round(record_hours(r, now), 4)
+        before = so_far.get(r.get("user_id"), 0.0)
+        regular = max(0.0, min(hours, threshold - before))
+        overtime = hours - regular
+        so_far[r.get("user_id")] = before + hours
+        rate = float(r.get("pay_rate") or 0)
+        pay = int(round((regular * rate + overtime * rate * multiplier) * 100))
+        result.append({**r, "hours": hours, "regular_hours": regular, "overtime_hours": overtime, "pay": pay})
+    return result
+
+
+def summarize_payroll(entries: List[dict]) -> dict:
+    """Totals by job and by employee (with each employee's jobs) from split_overtime() output."""
+    def blank():
+        return {"hours": 0.0, "regular_hours": 0.0, "overtime_hours": 0.0, "pay": 0, "shifts": 0}
+
+    def add(t, e):
+        for k in ("hours", "regular_hours", "overtime_hours"):
+            t[k] += e[k]
+        t["pay"] += e["pay"]
+        t["shifts"] += 1
+
+    totals, by_site, by_user = blank(), {}, {}
+    for e in entries:
+        add(totals, e)
+        site = by_site.setdefault(e.get("site_id"), {**blank(), "site_id": e.get("site_id"),
+                                                      "site_name": e.get("site_name"), "workers": set()})
+        add(site, e)
+        site["workers"].add(e.get("user_id"))
+        user = by_user.setdefault(e.get("user_id"), {**blank(), "user_id": e.get("user_id"),
+                                                      "user_name": e.get("user_name"), "jobs": {},
+                                                      "missing_rate": False, "open_shifts": 0})
+        add(user, e)
+        if not e.get("pay_rate"):
+            user["missing_rate"] = True
+        if not e.get("clock_out"):
+            user["open_shifts"] += 1
+        job = user["jobs"].setdefault(e.get("site_id"), {**blank(), "site_id": e.get("site_id"),
+                                                         "site_name": e.get("site_name")})
+        add(job, e)
+
+    def rnd(t):
+        for k in ("hours", "regular_hours", "overtime_hours"):
+            t[k] = round(t[k], 2)
+        return t
+
+    sites = []
+    for site in by_site.values():
+        site["workers"] = len(site["workers"])
+        sites.append(rnd(site))
+    users = []
+    for user in by_user.values():
+        user["jobs"] = sorted((rnd(j) for j in user["jobs"].values()), key=lambda j: -j["hours"])
+        users.append(rnd(user))
+    return {"totals": rnd(totals), "by_site": sorted(sites, key=lambda x: -x["pay"]),
+            "by_user": sorted(users, key=lambda x: (x["user_name"] or "").lower())}
+
+
 # --------------------------------------------------------------------------- workflows
 
 SCOPES = {

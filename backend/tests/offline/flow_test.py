@@ -297,6 +297,55 @@ async def main():
         check(got == expect, "%-26s %-20s %s" % (fn.__name__, who["role"], "allowed" if got else "blocked"))
     await expect_error(M.list_releases(site_id=None, current_user=fm), 403, "foreman blocked from release costs (in-function check)")
 
+    print("\n-- accounting: weekly payroll, A/R and downloads")
+    from features import accounting as ACC
+    import io as _io, zipfile as _zip
+    from openpyxl import load_workbook
+    await db.clock_records.delete_many({})
+    site2 = await server.create_site(core.SiteCreate(name="Harbour Clinic", address="9 Bay Rd", contract_value=90000), admin)
+    wk = ACC.week_of(ACC.local_today()) - timedelta(days=7)          # last full pay week
+    for day in range(5):                                              # Ed: 5 x 10 h, last day at the clinic
+        a, _ = ACC.utc_bounds(wk + timedelta(days=day), wk + timedelta(days=day))
+        await db.clock_records.insert_one({"user_id": str(e1["_id"]), "user_name": "Ed Framer",
+            "site_id": sid if day < 4 else site2.id, "site_name": "Riverside Tower" if day < 4 else "Harbour Clinic",
+            "clock_in": a + timedelta(hours=7), "clock_out": a + timedelta(hours=17), "total_hours": 10.0,
+            "status": "clocked_out", "pay_rate": 40.0, "flagged": day == 2, "flag_reason": "outside site" if day == 2 else None})
+        await db.clock_records.insert_one({"user_id": str(e2["_id"]), "user_name": "Ann Boarder", "site_id": sid,
+            "site_name": "Riverside Tower", "clock_in": a + timedelta(hours=7), "clock_out": a + timedelta(hours=15),
+            "total_hours": 8.0, "status": "clocked_out", "pay_rate": 36.0})
+    ov = await ACC.overview(week_start=wk.isoformat(), current_user=coord)
+    t = ov["labour"]["totals"]
+    check(t["hours"] == 90 and t["overtime_hours"] == 6, "week totals: 90 h, 6 h overtime (%s)" % t)
+    check(t["pay"] == 44 * 40 + 6 * 60 + 40 * 36, "payout: Ed 44x$40 + 6x$60, Ann 40x$36 = $%s" % t["pay"])
+    clinic = [x for x in ov["labour"]["by_site"] if x["site_id"] == site2.id][0]
+    check(clinic["overtime_hours"] == 6 and clinic["pay"] == 4 * 40 + 6 * 60, "overtime lands on the job it was worked on")
+    check(any("flagged" in w for w in ov["labour"]["warnings"]), "flagged clock-ins called out")
+    check(ov["draws"]["summary"]["outstanding"] == 96560.0 and len(ov["draws"]["outstanding"]) == 1,
+          "outstanding draws listed with A/R totals")
+    await expect_error(ACC.export_link(ACC.ExportIn(kind="hours"), coord), 400, "hours download needs dates")
+    end = (wk + timedelta(days=6)).isoformat()
+    link = await ACC.export_link(ACC.ExportIn(kind="hours", start=wk.isoformat(), end=end), coord)
+    resp = await ACC.export(token=link["url"].split("token=")[1])
+    wb = load_workbook(_io.BytesIO(resp.body))
+    check({"Summary by job", "Summary by employee", "All entries", "Job - Harbour Clinic", "Ed Framer", "Ann Boarder"}
+          <= set(wb.sheetnames), "workbook has summaries plus a tab per job and per employee (%s)" % wb.sheetnames)
+    check(wb["All entries"].max_row == 12, "all 10 shifts + header + total row")
+    one = await ACC.export(token=(await ACC.export_link(ACC.ExportIn(kind="hours", start=wk.isoformat(), end=end,
+                                                                       site_id=site2.id), coord))["url"].split("token=")[1])
+    ws = load_workbook(_io.BytesIO(one.body))["All entries"]
+    check(ws.max_row == 3 and ws.cell(row=2, column=10).value == 6, "one-job download keeps the week's overtime")
+    z = await ACC.export(token=(await ACC.export_link(ACC.ExportIn(kind="hours", start=wk.isoformat(), end=end,
+                                                                     format="zip"), coord))["url"].split("token=")[1])
+    names = _zip.ZipFile(_io.BytesIO(z.body)).namelist()
+    check(len([n for n in names if n.startswith("Employees/")]) == 2 and len([n for n in names if n.startswith("Jobs/")]) == 2,
+          "zip has a file per employee and per job (%s)" % names)
+    reg = await ACC.export(token=(await ACC.export_link(ACC.ExportIn(kind="draws"), coord))["url"].split("token=")[1])
+    check(load_workbook(_io.BytesIO(reg.body))["Invoice register"].cell(row=2, column=1).value == "24-017-D01",
+          "invoice register download")
+    for fn in (ACC.overview, ACC.export_link):
+        check(await allowed(fn, pm) is False and await allowed(fn, est) is False and await allowed(fn, coord) is True,
+              "%s: accounting only (admin / coordinator)" % fn.__name__)
+
     print("\n-- website estimate requests")
     import fastapi as FA
     from features import public as PUB

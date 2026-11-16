@@ -6,6 +6,7 @@ def _get(doc, path):
     cur = doc
     for p in path.split("."):
         if isinstance(cur, dict) and p in cur: cur = cur[p]
+        elif isinstance(cur, list) and p.isdigit() and int(p) < len(cur): cur = cur[int(p)]
         else: return None
     return cur
 
@@ -31,6 +32,8 @@ def _match_cond(val, cond):
             elif op == "$regex":
                 flags = re.I if "i" in cond.get("$options", "") else 0
                 if val is None or not re.search(arg, str(val), flags): return False
+            elif op == "$exists":
+                if (val is not None) != bool(arg): return False
             elif op == "$options": pass
             else: raise NotImplementedError(op)
         return True
@@ -105,6 +108,10 @@ class Collection:
         r = self._find(q)
         if r: self.docs.remove(r[0])
         return Result(deleted_count=len(r[:1]))
+    async def delete_many(self, q):
+        r = self._find(q)
+        for d in r: self.docs.remove(d)
+        return Result(deleted_count=len(r))
     async def create_index(self, *a, **k): return "ix"
 
 class DB:

@@ -55,6 +55,7 @@ export default function ManagerLayout() {
         <Stack.Screen name="tasks" options={{ title: 'All Tasks' }} />
         <Stack.Screen name="forms" options={{ title: 'Forms' }} />
         <Stack.Screen name="notifications" options={{ title: 'Notifications' }} />
+        <Stack.Screen name="accounting" options={{ title: 'Accounting' }} />
         <Stack.Screen name="project/[id]" options={{ title: 'Project' }} />
     </Stack>
   );
