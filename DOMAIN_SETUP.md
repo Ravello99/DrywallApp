@@ -10,37 +10,61 @@ It takes two parts: a DNS record in cPanel, then one command on the server.
 
 ---
 
-## Part 1: Add the DNS record in cPanel
+## Part 1: Add the CNAME record in HostPapa's cPanel
 
-### Which record: A or CNAME?
+HostPapa only manages the DNS for `vanguarddrywall.ca`. The app runs on your separate app server,
+the machine where you run `run.py`. A CNAME has to point to a hostname, not an IP address, so first
+get a hostname for the app server.
 
-A **CNAME** has to point to another *name*, not to an IP address.
+### 1. Get the CNAME target from the app server
 
-- **Your server has only an IP address** (for example `203.0.113.5`). Use an **A record** instead. It does the same job for an IP. This is the usual case for a VPS.
-- **Your hosting provider gave the server a hostname** (for example `vps-12345.yourhost.com`). You can use a **CNAME** pointing to that hostname.
-
-To find the server's IP, run this on the server:
+Log in to the app server and run:
 
 ```bash
-curl -4 ifconfig.me
+cd ~/DrywallApp
+python3 run.py update        # gets this new command (and restarts the app as usual)
+python3 run.py dns-target
 ```
 
-### Steps in cPanel
+It prints the server's IP and one or two hostnames, for example:
 
-1. Log in to cPanel for **vanguarddrywall.ca**.
-2. In the **Domains** section, open **Zone Editor**.
-   - Don't use the **Subdomains** tool for this. It would point `app` at your cPanel web host instead of your app server.
-3. On the **vanguarddrywall.ca** row, click **+ A Record** or **+ CNAME Record**. On some cPanel versions, click **Manage**, then **+ Add Record**, then choose the type.
+```
+This server's public IP: 203.0.113.5
+
+Put ONE of these in the CNAME record's target ("Record") field:
+
+  1. vps-1a2b3c.vps.ovh.ca
+     your server provider's hostname for this server (best choice)
+
+  2. 203-0-113-5.sslip.io
+     free public service that always resolves to 203.0.113.5 (works with any provider)
+```
+
+- If it shows a **provider hostname** (option 1), use that one.
+- If only the **sslip.io** name appears, use it. It's a free, widely used service that always
+  points to the IP written in the name.
+- Either way, if the server's IP ever changes, the record needs updating.
+- Some providers also show a hostname in their control panel (often called
+  "hostname", "reverse DNS" or "PTR"). That works too, as long as it resolves to the server's IP.
+
+### 2. Add the record in cPanel
+
+1. Log in to HostPapa and open **cPanel** for vanguarddrywall.ca.
+2. In the **Domains** section, open **Zone Editor**. Don't use the **Subdomains** tool: it would
+   send `app` to HostPapa's web server instead of your app server.
+3. On the **vanguarddrywall.ca** row, click **+ CNAME Record**. On some versions, click
+   **Manage**, then **+ Add Record**, then choose type **CNAME**.
 4. Fill it in:
 
-   | Field | A record (server has an IP) | CNAME record (server has a hostname) |
-   |---|---|---|
-   | Name | `app` (cPanel fills in `app.vanguarddrywall.ca.`) | `app` |
-   | TTL | `300` (or leave the default) | `300` |
-   | Record / Address | your server's IP, e.g. `203.0.113.5` | the server's hostname, e.g. `vps-12345.yourhost.com` |
+   | Field | Value |
+   |---|---|
+   | Name | `app` (cPanel fills in `app.vanguarddrywall.ca.`) |
+   | TTL | `300` (or the default) |
+   | Record / CNAME | the hostname from step 1, e.g. `203-0-113-5.sslip.io` |
 
-5. Click **Add Record** (or **Save Record**).
-6. If a record named `app.vanguarddrywall.ca` already exists, edit it or delete it, so there is only one.
+5. Click **Add Record**.
+6. If a record named `app.vanguarddrywall.ca` already exists (an A or CNAME record), delete it
+   first. A name can only have one CNAME, and nothing else alongside it.
 
 ### Check that it worked
 
@@ -50,9 +74,9 @@ Wait 5 to 30 minutes, then run this on the server:
 getent hosts app.vanguarddrywall.ca
 ```
 
-It should show your server's IP. If it shows nothing or a different IP, wait longer, or check the record.
+It should show the app server's IP. If it shows nothing or a different IP, wait longer, or check the record.
 
-> **Note:** if your domain's nameservers point somewhere other than your cPanel host (for example Cloudflare or your domain registrar), changes in cPanel's Zone Editor have no effect. Add the same record wherever your DNS is actually managed. On Cloudflare, set the record to **DNS only** (grey cloud).
+> **Note:** if your domain's nameservers point somewhere other than HostPapa (for example Cloudflare or your domain registrar), changes in cPanel's Zone Editor have no effect. Add the same record wherever your DNS is actually managed. On Cloudflare, set the record to **DNS only** (grey cloud).
 
 ---
 
@@ -60,19 +84,18 @@ It should show your server's IP. If it shows nothing or a different IP, wait lon
 
 ### 1. Open the ports
 
-In your server provider's firewall or security group, allow incoming **TCP 80 and 443** (443 for HTTPS, 80 so the certificate can be issued). Keep 8000 and 8081 open as well. If the server uses `ufw`, run.py opens 80 and 443 there for you.
+In the **app server provider's** firewall or security group (not HostPapa), allow incoming **TCP 80 and 443** (443 for HTTPS, 80 so the certificate can be issued). Keep 8000 and 8081 open as well. If the server uses `ufw`, run.py opens 80 and 443 there for you.
 
-### 2. Run the update
+### 2. Switch to the domain
 
-On the server:
+On the app server:
 
 ```bash
 cd ~/DrywallApp
-python3 run.py update --domain app.vanguarddrywall.ca
+python3 run.py --domain app.vanguarddrywall.ca
 ```
 
 This command:
-- Gets the latest code.
 - Checks that `app.vanguarddrywall.ca` really points at this server. If it doesn't, it stops and changes nothing.
 - Installs Caddy into the app folder. Caddy obtains the SSL certificate from Let's Encrypt and renews it automatically.
 - Rebuilds the web app to use `https://app.vanguarddrywall.ca`, then restarts everything.

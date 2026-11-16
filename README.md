@@ -157,7 +157,7 @@ OVERTIME_MULTIPLIER=1.5
 ### Domain and HTTPS
 
 To serve the app at https://app.vanguarddrywall.ca, follow [DOMAIN_SETUP.md](DOMAIN_SETUP.md):
-add the DNS record in cPanel, then run `python3 run.py update --domain app.vanguarddrywall.ca`.
+run `python3 run.py dns-target` for the CNAME target, add the CNAME in cPanel, then run `python3 run.py --domain app.vanguarddrywall.ca`.
 
 ## Tests
 

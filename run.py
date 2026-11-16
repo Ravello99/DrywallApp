@@ -9,6 +9,7 @@ One-command launcher for the Drywall Company Management App, for an Ubuntu 20.04
     python3 run.py stop       stop everything (and don't start on reboot)
     python3 run.py logs       follow the logs (Ctrl+C to stop watching)
     python3 run.py update     get the latest version from GitHub and restart
+    python3 run.py dns-target what to put in a CNAME record that points a domain here
 
 Options for the first command:
     --domain <name>       serve the app at https://<name> (e.g. app.vanguarddrywall.ca):
@@ -274,6 +275,29 @@ def check_domain_dns(domain: str) -> None:
              "        (If this server is behind a load balancer or NAT, add --force to skip this check.)"
              % (domain, ", ".join(ips), public_ip() or local_ip()))
     info("%s points to this server (%s)." % (domain, ", ".join(ips)))
+
+
+def dns_target() -> None:
+    """Print the hostname(s) a CNAME record can point to, so a domain whose DNS only allows
+    CNAMEs (e.g. shared hosting cPanel) can still reach this server."""
+    ip = public_ip()
+    if not ip:
+        fail("Couldn't work out this server's public IP (no internet access?).")
+    print("\nThis server's public IP: %s\n" % ip)
+    options = []
+    try:
+        name = socket.gethostbyaddr(ip)[0].rstrip(".")
+        if name and socket.gethostbyname(name) == ip:
+            options.append((name, "your server provider's hostname for this server (best choice)"))
+    except OSError:
+        pass
+    options.append(("%s.sslip.io" % ip.replace(".", "-"),
+                    "free public service that always resolves to %s (works with any provider)" % ip))
+    print("Put ONE of these in the CNAME record's target (\"Record\") field:\n")
+    for n, (host, why) in enumerate(options, 1):
+        print("  %d. %s\n     %s\n" % (n, host, why))
+    print("Then, once  getent hosts <your domain>  shows %s, run:" % ip)
+    print("  python3 run.py --domain <your domain>\n")
 
 
 def ensure_caddy() -> Path:
@@ -805,6 +829,8 @@ def main() -> None:
         return
     if args[:1] == ["status"]:
         return print_summary()
+    if args[:1] == ["dns-target"]:
+        return dns_target()
     if args[:1] == ["logs"]:
         LOGS.mkdir(exist_ok=True)
         files = [str(p) for p in sorted(LOGS.glob("*.log"))]
