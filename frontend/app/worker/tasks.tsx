@@ -163,7 +163,7 @@ function WorkerTasksScreen() {
                   <View style={styles.taskMeta}>
                     <View style={[styles.badge, { backgroundColor: getPriorityColor(task.priority) + '20' }]}>
                       <Text style={[styles.badgeText, { color: getPriorityColor(task.priority) }]}>
-                        {task.priority.toUpperCase()}
+                        {(task.priority || 'medium').toUpperCase()}
                       </Text>
                     </View>
                     <View style={[styles.badge, { backgroundColor: COLORS.gray200 }]}>

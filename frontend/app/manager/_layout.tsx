@@ -1,64 +1,40 @@
-import '../../src/utils/webViewportFix'; // size the web app to the visible screen (must load first)
-import '../../src/utils/webAlert'; // browser-friendly Alert.alert (must load first)
 import React, { useEffect, useState } from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
-import { Tabs, useRouter } from 'expo-router';
+import { Tabs, Redirect } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { COLORS } from '../../src/constants/colors';
 import BrandTabBar from '../../src/components/BrandTabBar';
 import { useAuthStore } from '../../src/store/authStore';
-import { authService } from '../../src/services/authService';
+import { resolveSession, homeFor } from '../../src/services/session';
 import { isOfficeRole } from '../../src/constants/roles';
 
 export default function ManagerLayout() {
-  const router = useRouter();
   const { user, setUser } = useAuthStore();
   const [checking, setChecking] = useState(true);
 
+  // Redirects are rendered (<Redirect>) rather than called from an effect, so they work
+  // with Expo Router 58's navigation core.
+  const [target, setTarget] = useState<string | null>(null);
+
   useEffect(() => {
-    checkAccess();
-  }, []);
-
-  const checkAccess = async () => {
-    try {
-      // Check if user is in store
-      if (user && isOfficeRole(user.role)) {
-        setChecking(false);
-        return;
-      }
-
-      // Try to get stored user
-      const storedUser = await authService.getStoredUser();
-      const token = await authService.getStoredToken();
-
-      if (!token || !storedUser) {
-        // Not logged in - redirect to login
-        router.replace('/');
-        return;
-      }
-
-      if (!isOfficeRole(storedUser.role)) {
-        // Not a manager - redirect to worker or login
-        if (storedUser.role) {
-          router.replace('/worker');
-        } else {
-          router.replace('/');
-        }
-        return;
-      }
-
-      // Valid manager - set user and continue
-      setUser(storedUser);
+    let live = true;
+    resolveSession().then((u) => {
+      if (!live) return;
+      if (!u) return setTarget('/');
+      if (!(isOfficeRole(u.role))) return setTarget(homeFor(u.role));
+      setUser(u);
       setChecking(false);
-    } catch (error) {
-      console.error('Access check error:', error);
-      router.replace('/');
-    }
-  };
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
 
   const role = user?.role || '';
   const canBid = ['admin', 'project_coordinator', 'estimator', 'project_manager'].includes(role);
   const canApprove = ['admin', 'project_manager'].includes(role);
+
+  if (target) return <Redirect href={target as any} />;
 
   if (checking) {
     return (

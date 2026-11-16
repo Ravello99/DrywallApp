@@ -1,7 +1,7 @@
 // In-app notifications (approvals, assignments, safety expiry, budgets, bids...).
 import React, { useCallback, useState } from 'react';
 import { ScrollView, RefreshControl, Text, Alert } from 'react-native';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useRouter, usePathname } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { AppNotification } from '../types/features';
 import { notificationsApi, apiError } from '../services/pmService';
@@ -22,8 +22,31 @@ const ICONS: Record<string, any> = {
   form: 'description',
 };
 
+// The same alert can go to office staff and foremen (e.g. a task over budget), so point each
+// link at the matching screen in the area this person uses.
+const OFFICE_EQUIVALENT: Record<string, string> = {
+  '/worker/requests': '/manager/approvals',
+  '/worker/rfis': '/manager/projects',
+  '/worker/calendar': '/manager/projects',
+  '/worker/tasks': '/manager/projects',
+  '/worker/forms': '/manager/forms',
+  '/worker/safety': '/manager/safety',
+};
+const FIELD_EQUIVALENT: Record<string, string> = {
+  '/manager/projects': '/worker',
+  '/manager/approvals': '/worker/requests',
+  '/manager/bids': '/worker',
+};
+
+export function linkFor(link: string, inOffice: boolean): string {
+  if (inOffice && link.startsWith('/worker')) return OFFICE_EQUIVALENT[link] || '/manager';
+  if (!inOffice && link.startsWith('/manager')) return FIELD_EQUIVALENT[link] || '/worker';
+  return link;
+}
+
 export default function NotificationsList() {
   const router = useRouter();
+  const inOffice = (usePathname() || '').startsWith('/manager');
   const [items, setItems] = useState<AppNotification[] | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -50,7 +73,7 @@ export default function NotificationsList() {
       notificationsApi.read(n.id).catch(() => undefined);
       setItems((prev) => (prev || []).map((x) => (x.id === n.id ? { ...x, read: true } : x)));
     }
-    if (n.link) router.push(n.link as any);
+    if (n.link) router.push(linkFor(n.link, inOffice) as any);
   };
 
   const readAll = async () => {

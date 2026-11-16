@@ -7,6 +7,7 @@ import { useAuthStore } from '../../src/store/authStore';
 import { authService } from '../../src/services/authService';
 import Footer from '../../src/components/Footer';
 import { roleLabel } from '../../src/constants/roles';
+import { clearSessionCache } from '../../src/services/session';
 import { COLORS } from '../../src/constants/colors';
 
 export default function ProfileScreen() {
@@ -21,6 +22,7 @@ export default function ProfileScreen() {
         style: 'destructive',
         onPress: async () => {
           await authService.logout();
+      clearSessionCache();
           logout();
           router.replace('/');
         },

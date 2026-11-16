@@ -1,13 +1,14 @@
 // "More" tab: links to the screens that don't fit in the tab bar, plus sign out.
 import React, { useCallback, useState } from 'react';
 import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useRouter, usePathname } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { COLORS, COMPANY } from '../constants/colors';
 import { roleLabel } from '../constants/roles';
 import { useAuthStore } from '../store/authStore';
 import { authService } from '../services/authService';
 import { notificationsApi } from '../services/pmService';
+import { clearSessionCache } from '../services/session';
 import Footer from './Footer';
 import { ui } from './ui';
 
@@ -16,6 +17,7 @@ export type MoreLink = { label: string; sub?: string; icon: any; href: string; s
 export default function MoreMenu({ links }: { links: MoreLink[] }) {
   const router = useRouter();
   const { user, logout } = useAuthStore();
+  const base = (usePathname() || '').startsWith('/manager') ? '/manager' : '/worker';
   const [unread, setUnread] = useState(0);
 
   useFocusEffect(
@@ -29,11 +31,12 @@ export default function MoreMenu({ links }: { links: MoreLink[] }) {
 
   const signOut = async () => {
     await authService.logout();
+    clearSessionCache();
     logout();
     router.replace('/');
   };
 
-  const all: MoreLink[] = [{ label: 'Notifications', icon: 'notifications', href: 'notifications', sub: unread ? `${unread} unread` : undefined }, ...links];
+  const all: MoreLink[] = [{ label: 'Notifications', icon: 'notifications', href: `${base}/notifications`, sub: unread ? `${unread} unread` : undefined }, ...links];
 
   return (
     <ScrollView contentContainerStyle={ui.pad}>

@@ -274,7 +274,7 @@ export default function WorkerFormsScreen() {
           headerStyle: { backgroundColor: COLORS.primary },
           headerTintColor: COLORS.white,
           headerLeft: () => (
-            <TouchableOpacity onPress={() => router.back()} style={{ marginLeft: 8 }}>
+            <TouchableOpacity onPress={() => (router.canGoBack() ? router.back() : router.replace('/worker/more' as any))} style={{ marginLeft: 8 }}>
               <MaterialIcons name="arrow-back" size={24} color={COLORS.white} />
             </TouchableOpacity>
           ),

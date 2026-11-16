@@ -187,7 +187,7 @@ export default function TasksScreen() {
           headerStyle: { backgroundColor: COLORS.primary },
           headerTintColor: COLORS.white,
           headerLeft: () => (
-            <TouchableOpacity onPress={() => router.back()} style={{ marginLeft: 8 }}>
+            <TouchableOpacity onPress={() => (router.canGoBack() ? router.back() : router.replace('/manager/more' as any))} style={{ marginLeft: 8 }}>
               <MaterialIcons name="arrow-back" size={24} color={COLORS.white} />
             </TouchableOpacity>
           ),
@@ -218,7 +218,7 @@ export default function TasksScreen() {
                     <View style={[styles.priorityIndicator, { backgroundColor: getPriorityColor(task.priority) }]} />
                     <View style={styles.taskInfo}>
                       <Text style={styles.taskTitle}>{task.title}</Text>
-                      <Text style={styles.taskAssignee}>Assigned to: {task.assigned_to_name}</Text>
+                      <Text style={styles.taskAssignee}>Assigned to: {task.assigned_to_name || 'Crew (unassigned)'}</Text>
                       <Text style={styles.taskSite}>{task.site_name}</Text>
                     </View>
                     <TouchableOpacity
@@ -236,7 +236,7 @@ export default function TasksScreen() {
                   <View style={styles.taskMeta}>
                     <View style={[styles.badge, { backgroundColor: getPriorityColor(task.priority) + '20' }]}>
                       <Text style={[styles.badgeText, { color: getPriorityColor(task.priority) }]}>
-                        {task.priority.toUpperCase()}
+                        {(task.priority || 'medium').toUpperCase()}
                       </Text>
                     </View>
                     <View style={[styles.badge, { backgroundColor: COLORS.gray200 }]}>

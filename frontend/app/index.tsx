@@ -1,5 +1,3 @@
-import '../src/utils/webViewportFix'; // size the web app to the visible screen (must load first)
-import '../src/utils/webAlert'; // browser-friendly Alert.alert (must load first)
 import React, { useEffect, useState } from 'react';
 import {
   View,
@@ -14,13 +12,13 @@ import {
   Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, Redirect } from 'expo-router';
 import { authService } from '../src/services/authService';
 import { useAuthStore } from '../src/store/authStore';
 import { MaterialIcons } from '@expo/vector-icons';
 import { COLORS } from '../src/constants/colors';
 import Footer from '../src/components/Footer';
-import { isOfficeRole } from '../src/constants/roles';
+import { resolveSession, homeFor, clearSessionCache } from '../src/services/session';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -28,6 +26,7 @@ export default function LoginScreen() {
   const [loginError, setLoginError] = useState('');
   const [loading, setLoading] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
+  const [home, setHome] = useState<string | null>(null);
   const router = useRouter();
   const { setUser } = useAuthStore();
 
@@ -37,17 +36,10 @@ export default function LoginScreen() {
 
   const checkExistingAuth = async () => {
     try {
-      const token = await authService.getStoredToken();
-      const storedUser = await authService.getStoredUser();
-      
-      if (token && storedUser) {
-        setUser(storedUser);
-        // Navigate based on role
-        if (isOfficeRole(storedUser.role)) {
-          router.replace('/manager');
-        } else {
-          router.replace('/worker');
-        }
+      const u = await resolveSession(true);
+      if (u) {
+        setUser(u);
+        setHome(homeFor(u.role));
       }
     } catch (error) {
       console.error('Auth check error:', error);
@@ -67,13 +59,8 @@ export default function LoginScreen() {
     try {
       const { user } = await authService.login(email.trim(), password);
       setUser(user);
-      
-      // Navigate based on role
-      if (isOfficeRole(user.role)) {
-        router.replace('/manager');
-      } else {
-        router.replace('/worker');
-      }
+      clearSessionCache();
+      router.replace(homeFor(user.role));
     } catch (error: any) {
       const detail = error.response?.data?.detail;
       const msg = !error.response
@@ -87,6 +74,8 @@ export default function LoginScreen() {
       setLoading(false);
     }
   };
+
+  if (home) return <Redirect href={home as any} />;
 
   if (checkingAuth) {
     return (

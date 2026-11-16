@@ -17,6 +17,7 @@ import { reportService } from '../../src/services/reportService';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { COLORS } from '../../src/constants/colors';
 import { authService } from '../../src/services/authService';
+import { clearSessionCache } from '../../src/services/session';
 import Footer from '../../src/components/Footer';
 import SiteGlanceCard from '../../src/components/SiteGlanceCard';
 import { projectsApi, notificationsApi, drawApi } from '../../src/services/pmService';
@@ -73,6 +74,7 @@ export default function ManagerDashboard() {
       if (confirmed) {
         try {
           await authService.logout();
+          clearSessionCache();
           logout();
           // Force page reload for web to clear all state
           window.location.href = '/';
@@ -90,6 +92,7 @@ export default function ManagerDashboard() {
           onPress: async () => {
             try {
               await authService.logout();
+          clearSessionCache();
               logout();
               router.replace('/');
             } catch (error) {
