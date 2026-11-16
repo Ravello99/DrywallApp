@@ -1,8 +1,8 @@
 import React from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import MoreMenu from '../../src/components/MoreMenu';
-import { useAuthStore } from '../../src/store/authStore';
-import { ui } from '../../src/components/ui';
+import MoreMenu from '../../../src/components/MoreMenu';
+import { useAuthStore } from '../../../src/store/authStore';
+import { ui } from '../../../src/components/ui';
 
 export default function WorkerMore() {
   const { user } = useAuthStore();

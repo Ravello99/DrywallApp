@@ -12,18 +12,18 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useAuthStore } from '../../src/store/authStore';
-import { reportService } from '../../src/services/reportService';
+import { useAuthStore } from '../../../src/store/authStore';
+import { reportService } from '../../../src/services/reportService';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { COLORS } from '../../src/constants/colors';
-import { authService } from '../../src/services/authService';
-import { clearSessionCache } from '../../src/services/session';
-import Footer from '../../src/components/Footer';
-import SiteGlanceCard from '../../src/components/SiteGlanceCard';
-import { projectsApi, notificationsApi, drawApi } from '../../src/services/pmService';
-import { SiteCard } from '../../src/types/features';
-import { roleLabel, canSeePayRates } from '../../src/constants/roles';
-import { money } from '../../src/components/ui';
+import { COLORS } from '../../../src/constants/colors';
+import { authService } from '../../../src/services/authService';
+import { clearSessionCache } from '../../../src/services/session';
+import Footer from '../../../src/components/Footer';
+import SiteGlanceCard from '../../../src/components/SiteGlanceCard';
+import { projectsApi, notificationsApi, drawApi } from '../../../src/services/pmService';
+import { SiteCard } from '../../../src/types/features';
+import { roleLabel, canSeePayRates } from '../../../src/constants/roles';
+import { money } from '../../../src/components/ui';
 
 export default function ManagerDashboard() {
   const { user, logout } = useAuthStore();

@@ -15,11 +15,11 @@ import {
 import * as Location from 'expo-location';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import { userService } from '../../src/services/userService';
-import { siteService } from '../../src/services/siteService';
-import { User, Site, UserRole } from '../../src/types';
-import { COLORS } from '../../src/constants/colors';
-import { useAuthStore } from '../../src/store/authStore';
+import { userService } from '../../../src/services/userService';
+import { siteService } from '../../../src/services/siteService';
+import { User, Site, UserRole } from '../../../src/types';
+import { COLORS } from '../../../src/constants/colors';
+import { useAuthStore } from '../../../src/store/authStore';
 import {
   ROLE_OPTIONS,
   SPECIALTY_OPTIONS,
@@ -33,9 +33,9 @@ import {
   jobTypeLabel,
   canSeePayRates,
   canShutDownSites,
-} from '../../src/constants/roles';
-import Footer from '../../src/components/Footer';
-import ModalPicker from '../../src/components/ModalPicker';
+} from '../../../src/constants/roles';
+import Footer from '../../../src/components/Footer';
+import ModalPicker from '../../../src/components/ModalPicker';
 
 const getRoleLabel = roleLabel;
 const getRoleColor = roleColor;

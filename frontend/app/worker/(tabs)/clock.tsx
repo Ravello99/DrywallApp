@@ -13,14 +13,14 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
-import { clockService } from '../../src/services/clockService';
-import { siteService } from '../../src/services/siteService';
+import { clockService } from '../../../src/services/clockService';
+import { siteService } from '../../../src/services/siteService';
 import { format } from 'date-fns';
-import { Site } from '../../src/types';
-import { COLORS } from '../../src/constants/colors';
-import Footer from '../../src/components/Footer';
-import { tasksApi, apiError } from '../../src/services/pmService';
-import { Chips } from '../../src/components/ui';
+import { Site } from '../../../src/types';
+import { COLORS } from '../../../src/constants/colors';
+import Footer from '../../../src/components/Footer';
+import { tasksApi, apiError } from '../../../src/services/pmService';
+import { Chips } from '../../../src/components/ui';
 
 export default function ClockScreen() {
   const [loading, setLoading] = useState(true);

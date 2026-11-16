@@ -2,15 +2,15 @@ import React, { useCallback, useState } from 'react';
 import { ScrollView, RefreshControl, Text, View, Alert, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { Bid, BidStats } from '../../src/types/features';
-import { bidApi, apiError } from '../../src/services/pmService';
-import { useAuthStore } from '../../src/store/authStore';
-import { COLORS } from '../../src/constants/colors';
-import Footer from '../../src/components/Footer';
+import { Bid, BidStats } from '../../../src/types/features';
+import { bidApi, apiError } from '../../../src/services/pmService';
+import { useAuthStore } from '../../../src/store/authStore';
+import { COLORS } from '../../../src/constants/colors';
+import Footer from '../../../src/components/Footer';
 import {
   Card, Pill, Row, Button, Sheet, Field, Chips, Empty, Loading, Stat, StatRow, SectionTitle,
   money, pct, shortDate, todayISO, ui,
-} from '../../src/components/ui';
+} from '../../../src/components/ui';
 
 const CATEGORY_OPTIONS = [
   { value: '', label: 'All types' },

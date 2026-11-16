@@ -2,12 +2,12 @@ import React, { useCallback, useState } from 'react';
 import { ScrollView, RefreshControl, Text, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
-import { ManpowerRequest, MaterialRequest } from '../../src/types/features';
-import { manpowerApi, materialsApi, projectsApi, apiError } from '../../src/services/pmService';
-import { useAuthStore } from '../../src/store/authStore';
-import ManpowerRequestCard from '../../src/components/ManpowerRequestCard';
-import Footer from '../../src/components/Footer';
-import { Card, Pill, Row, Button, Sheet, Field, Empty, Loading, SectionTitle, Segments, shortDate, todayISO, timeOf, ui } from '../../src/components/ui';
+import { ManpowerRequest, MaterialRequest } from '../../../src/types/features';
+import { manpowerApi, materialsApi, projectsApi, apiError } from '../../../src/services/pmService';
+import { useAuthStore } from '../../../src/store/authStore';
+import ManpowerRequestCard from '../../../src/components/ManpowerRequestCard';
+import Footer from '../../../src/components/Footer';
+import { Card, Pill, Row, Button, Sheet, Field, Empty, Loading, SectionTitle, Segments, shortDate, todayISO, timeOf, ui } from '../../../src/components/ui';
 
 export default function ApprovalsScreen() {
   const { user } = useAuthStore();

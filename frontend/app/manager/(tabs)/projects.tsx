@@ -2,11 +2,11 @@ import React, { useCallback, useState } from 'react';
 import { ScrollView, RefreshControl, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { SiteCard } from '../../src/types/features';
-import { projectsApi, apiError } from '../../src/services/pmService';
-import SiteGlanceCard from '../../src/components/SiteGlanceCard';
-import Footer from '../../src/components/Footer';
-import { Chips, Empty, Loading, ui } from '../../src/components/ui';
+import { SiteCard } from '../../../src/types/features';
+import { projectsApi, apiError } from '../../../src/services/pmService';
+import SiteGlanceCard from '../../../src/components/SiteGlanceCard';
+import Footer from '../../../src/components/Footer';
+import { Chips, Empty, Loading, ui } from '../../../src/components/ui';
 
 export default function ProjectsScreen() {
   const router = useRouter();

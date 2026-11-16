@@ -11,20 +11,20 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useAuthStore } from '../../src/store/authStore';
-import { clockService } from '../../src/services/clockService';
-import { safetyService } from '../../src/services/safetyService';
-import { taskService } from '../../src/services/taskService';
-import { formService } from '../../src/services/formService';
-import syncService from '../../src/services/syncService';
+import { useAuthStore } from '../../../src/store/authStore';
+import { clockService } from '../../../src/services/clockService';
+import { safetyService } from '../../../src/services/safetyService';
+import { taskService } from '../../../src/services/taskService';
+import { formService } from '../../../src/services/formService';
+import syncService from '../../../src/services/syncService';
 import { format } from 'date-fns';
-import { roleLabel } from '../../src/constants/roles';
-import FieldOverview from '../../src/components/field/FieldOverview';
-import { COLORS } from '../../src/constants/colors';
+import { roleLabel } from '../../../src/constants/roles';
+import FieldOverview from '../../../src/components/field/FieldOverview';
+import { COLORS } from '../../../src/constants/colors';
 import NetInfo from '@react-native-community/netinfo';
 import { useRouter } from 'expo-router';
-import Footer from '../../src/components/Footer';
-import { UserRole } from '../../src/types';
+import Footer from '../../../src/components/Footer';
+import { UserRole } from '../../../src/types';
 
 const getRoleLabel = (role: UserRole): string => roleLabel(role);
 

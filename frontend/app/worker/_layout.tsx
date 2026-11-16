@@ -1,17 +1,16 @@
+// Worker area: checks who is signed in, then shows the tabs with every other page stacked on top.
 import React, { useEffect, useState } from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
-import { Tabs, Redirect } from 'expo-router';
-import { MaterialIcons } from '@expo/vector-icons';
+import { Stack, Redirect } from 'expo-router';
 import { COLORS } from '../../src/constants/colors';
-import BrandTabBar from '../../src/components/BrandTabBar';
 import { useAuthStore } from '../../src/store/authStore';
 import { resolveSession, homeFor } from '../../src/services/session';
 import { isOfficeRole } from '../../src/constants/roles';
+import HeaderBack from '../../src/components/HeaderBack';
 
 export default function WorkerLayout() {
-  const { user, setUser } = useAuthStore();
+  const { setUser } = useAuthStore();
   const [checking, setChecking] = useState(true);
-
   // Redirects are rendered (<Redirect>) rather than called from an effect, so they work
   // with Expo Router 58's navigation core.
   const [target, setTarget] = useState<string | null>(null);
@@ -30,8 +29,6 @@ export default function WorkerLayout() {
     };
   }, []);
 
-  const isForeman = user?.role === 'foreman';
-
   if (target) return <Redirect href={target as any} />;
 
   if (checking) {
@@ -43,89 +40,24 @@ export default function WorkerLayout() {
   }
 
   return (
-    <Tabs
-      tabBar={() => (
-        <BrandTabBar
-          base="/worker"
-          aliases={{}}
-          tabs={[
-            { name: 'index', label: 'Home', icon: 'home' },
-            { name: 'clock', label: 'Clock', icon: 'access-time' },
-            { name: 'calendar', label: 'Calendar', icon: 'event' },
-            { name: 'tasks', label: 'Tasks', icon: 'checklist' },
-            ...(isForeman ? [{ name: 'requests', label: 'Requests', icon: 'local-shipping' }] : []),
-            { name: 'more', label: 'More', icon: 'menu' },
-          ]}
-        />
-      )}
+    <Stack
       screenOptions={{
-        tabBarActiveTintColor: COLORS.primary,
-        tabBarInactiveTintColor: COLORS.gray400,
-        headerStyle: {
-          backgroundColor: COLORS.primary,
-        },
+        headerStyle: { backgroundColor: COLORS.primary },
         headerTintColor: COLORS.white,
-        headerTitleStyle: {
-          fontWeight: 'bold',
-        },
+        headerTitleStyle: { fontWeight: 'bold' },
+        headerLeft: () => <HeaderBack fallback="/worker" />,
       }}
     >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Home',
-          tabBarIcon: ({ color, size }) => <MaterialIcons name="home" size={size} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="clock"
-        options={{
-          title: 'Clock In/Out',
-          tabBarLabel: 'Clock',
-          tabBarIcon: ({ color, size }) => <MaterialIcons name="access-time" size={size} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="calendar"
-        options={{
-          title: 'My Calendar',
-          tabBarLabel: 'Calendar',
-          tabBarIcon: ({ color, size }) => <MaterialIcons name="event" size={size} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="tasks"
-        options={{
-          title: isForeman ? 'Site Tasks' : 'My Tasks',
-          tabBarLabel: 'Tasks',
-          tabBarIcon: ({ color, size }) => <MaterialIcons name="checklist" size={size} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="requests"
-        options={{
-          title: 'Requests',
-          href: isForeman ? undefined : null,
-          tabBarIcon: ({ color, size }) => <MaterialIcons name="local-shipping" size={size} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="more"
-        options={{
-          title: 'More',
-          tabBarIcon: ({ color, size }) => <MaterialIcons name="menu" size={size} color={color} />,
-        }}
-      />
-      {/* Reached from Home / More, not the tab bar */}
-      <Tabs.Screen name="forms" options={{ href: null, title: 'Forms' }} />
-      <Tabs.Screen name="safety" options={{ href: null, title: 'Safety Documents' }} />
-      <Tabs.Screen name="announcements" options={{ href: null, title: 'Announcements' }} />
-      <Tabs.Screen name="profile" options={{ href: null, title: 'Profile' }} />
-      <Tabs.Screen name="hours" options={{ href: null, title: 'My Hours' }} />
-      <Tabs.Screen name="rfis" options={{ href: null, title: 'RFIs' }} />
-      <Tabs.Screen name="crew-safety" options={{ href: null, title: 'Crew Safety' }} />
-      <Tabs.Screen name="notifications" options={{ href: null, title: 'Notifications' }} />
-    </Tabs>
+      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="forms" options={{ title: 'Forms' }} />
+        <Stack.Screen name="safety" options={{ title: 'Safety Documents' }} />
+        <Stack.Screen name="announcements" options={{ title: 'Announcements' }} />
+        <Stack.Screen name="profile" options={{ title: 'Profile' }} />
+        <Stack.Screen name="hours" options={{ title: 'My Hours' }} />
+        <Stack.Screen name="rfis" options={{ title: 'RFIs' }} />
+        <Stack.Screen name="crew-safety" options={{ title: 'Crew Safety' }} />
+        <Stack.Screen name="notifications" options={{ title: 'Notifications' }} />
+    </Stack>
   );
 }
 

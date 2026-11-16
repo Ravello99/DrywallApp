@@ -12,13 +12,13 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
-import { taskService } from '../../src/services/taskService';
+import { taskService } from '../../../src/services/taskService';
 import { format } from 'date-fns';
-import { Task } from '../../src/types';
-import { COLORS } from '../../src/constants/colors';
-import Footer from '../../src/components/Footer';
-import { useAuthStore } from '../../src/store/authStore';
-import ForemanTasks from '../../src/components/field/ForemanTasks';
+import { Task } from '../../../src/types';
+import { COLORS } from '../../../src/constants/colors';
+import Footer from '../../../src/components/Footer';
+import { useAuthStore } from '../../../src/store/authStore';
+import ForemanTasks from '../../../src/components/field/ForemanTasks';
 
 const PRIORITIES = [
   { value: 'high', label: 'High', color: COLORS.error },
