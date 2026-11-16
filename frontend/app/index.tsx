@@ -1,3 +1,4 @@
+import '../src/utils/webViewportFix'; // size the web app to the visible screen (must load first)
 import '../src/utils/webAlert'; // browser-friendly Alert.alert (must load first)
 import React, { useEffect, useState } from 'react';
 import {

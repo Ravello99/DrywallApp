@@ -1,9 +1,11 @@
+import '../../src/utils/webViewportFix'; // size the web app to the visible screen (must load first)
 import '../../src/utils/webAlert'; // browser-friendly Alert.alert (must load first)
 import React, { useEffect, useState } from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { Tabs, useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { COLORS } from '../../src/constants/colors';
+import BrandTabBar from '../../src/components/BrandTabBar';
 import { useAuthStore } from '../../src/store/authStore';
 import { authService } from '../../src/services/authService';
 import { isOfficeRole } from '../../src/constants/roles';
@@ -62,25 +64,10 @@ export default function WorkerLayout() {
 
   return (
     <Tabs
+      tabBar={(props: any) => <BrandTabBar {...props} visible={['index', 'clock', 'calendar', 'tasks', ...(isForeman ? ['requests'] : []), 'more']} />}
       screenOptions={{
         tabBarActiveTintColor: COLORS.primary,
         tabBarInactiveTintColor: COLORS.gray400,
-        // No fixed height: the tab bar sizes itself to fit icon + label and adds the phone's
-        // bottom safe-area space (a fixed 60px cut the labels off).
-        tabBarStyle: {
-          backgroundColor: COLORS.white,
-          borderTopWidth: 1,
-          borderTopColor: COLORS.gray200,
-        },
-        tabBarItemStyle: {
-          paddingTop: 4,
-          paddingBottom: 2,
-        },
-        tabBarLabelPosition: 'below-icon',
-        tabBarLabelStyle: {
-          fontSize: 12,
-          fontWeight: '600',
-        },
         headerStyle: {
           backgroundColor: COLORS.primary,
         },
