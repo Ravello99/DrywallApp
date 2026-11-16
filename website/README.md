@@ -9,13 +9,14 @@ There, Employee login opens the app on the same server and estimate requests go 
 the app's **Bids** tab (estimators and coordinators get a notification).
 
 ## Hosting it on your own domain
-Upload `index.html` and the `assets/` folder to any web host, then edit the `SITE` settings
-near the bottom of `index.html`:
+Upload `index.html` and the `assets/` folder to any web host (for cPanel: File Manager →
+`public_html`). The `SITE` settings near the bottom of `index.html` already point at
+`https://app.vanguarddrywall.ca` (see ../DOMAIN_SETUP.md); change them if the app moves:
 
 ```js
 var SITE = {
-  appUrl: 'http://YOUR-SERVER-IP:8000',   // where Employee login goes
-  apiUrl: 'http://YOUR-SERVER-IP:8000',   // receives estimate requests
+  appUrl: 'https://app.vanguarddrywall.ca',   // where Employee login goes
+  apiUrl: 'https://app.vanguarddrywall.ca',   // receives estimate requests
   email: 'info@AltraDrywall.ca',          // change when the VanGuard address is ready
   phone: '289-866-7222'
 };

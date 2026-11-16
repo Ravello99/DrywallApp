@@ -154,6 +154,11 @@ OVERTIME_WEEKLY_HOURS=44    # Ontario ESA
 OVERTIME_MULTIPLIER=1.5
 ```
 
+### Domain and HTTPS
+
+To serve the app at https://app.vanguarddrywall.ca, follow [DOMAIN_SETUP.md](DOMAIN_SETUP.md):
+add the DNS record in cPanel, then run `python3 run.py update --domain app.vanguarddrywall.ca`.
+
 ## Tests
 
 ```bash

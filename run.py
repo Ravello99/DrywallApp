@@ -11,6 +11,10 @@ One-command launcher for the Drywall Company Management App, for an Ubuntu 20.04
     python3 run.py update     get the latest version from GitHub and restart
 
 Options for the first command:
+    --domain <name>       serve the app at https://<name> (e.g. app.vanguarddrywall.ca):
+                          installs Caddy, which gets and renews a free SSL certificate.
+                          Point the name's DNS at this server first. Remembered; use
+                          --domain off to go back to http://<host>:8000.
     --host <name-or-IP>   address phones and browsers use to reach this server
                           (default: the server's public IP, detected automatically;
                           the choice is remembered in .data/launcher.json)
@@ -29,6 +33,7 @@ What runs (all supervised and restarted automatically if one crashes):
   * MongoDB on 127.0.0.1:27017 (not reachable from outside)
   * Backend API + web app on port 8000   ->  http://<host>:8000
   * Expo dev server on port 8081          ->  phones open it in the Expo Go app
+  * With --domain: Caddy on ports 80/443  ->  https://<domain> (SSL, forwards to port 8000)
 """
 from __future__ import annotations
 
@@ -58,6 +63,7 @@ MONGO_VERSION_NO_AVX = "4.4.29"         # last MongoDB that runs on CPUs without
 MONGO_PORT = 27017
 BACKEND_PORT = 8000
 EXPO_PORT = 8081
+CADDY_VERSION = "2.8.4"
 DB_NAME = "drywall_app"
 ADMIN_EMAIL = "admin@drywall.local"
 
@@ -246,6 +252,83 @@ def choose_host(cli_host) -> str:
     return host
 
 
+def app_url(state: dict, host: str) -> str:
+    """Where browsers, phones and the website reach the app."""
+    domain = state.get("domain")
+    return "https://%s" % domain if domain else "http://%s:%d" % (host, BACKEND_PORT)
+
+
+def check_domain_dns(domain: str) -> None:
+    """Make sure the domain already points at this server before switching the app to it,
+    otherwise the SSL certificate can't be issued and the app would stop working."""
+    try:
+        ips = sorted({a[4][0] for a in socket.getaddrinfo(domain, 443, socket.AF_INET)})
+    except OSError:
+        fail("%s doesn't resolve yet. Add the DNS record (see DOMAIN_SETUP.md), wait a few\n"
+             "        minutes, check with:  getent hosts %s\n"
+             "        then run this again. The app keeps working on its current address meanwhile." % (domain, domain))
+    mine = {public_ip(), local_ip()}
+    if not mine & set(ips):
+        fail("%s points to %s, but this server is %s.\n"
+             "        Fix the DNS record (see DOMAIN_SETUP.md) and wait for it to update, then run again.\n"
+             "        (If this server is behind a load balancer or NAT, add --force to skip this check.)"
+             % (domain, ", ".join(ips), public_ip() or local_ip()))
+    info("%s points to this server (%s)." % (domain, ", ".join(ips)))
+
+
+def ensure_caddy() -> Path:
+    found = find_file(TOOLS / "caddy", "caddy")
+    if found:
+        return found
+    step("Installing Caddy %s (HTTPS with automatic certificates)" % CADDY_VERSION)
+    a = {"x86_64": "amd64", "aarch64": "arm64"}[arch()]
+    archive = TOOLS / "caddy.tar.gz"
+    download("https://github.com/caddyserver/caddy/releases/download/v%s/caddy_%s_linux_%s.tar.gz"
+             % (CADDY_VERSION, CADDY_VERSION, a), archive)
+    extract(archive, TOOLS / "caddy")
+    caddy = find_file(TOOLS / "caddy", "caddy")
+    if not caddy:
+        fail("Caddy didn't unpack correctly; delete .tools/caddy and run again.")
+    caddy.chmod(0o755)
+    return caddy
+
+
+def caddy_can_bind(caddy: Path) -> bool:
+    if os.geteuid() == 0:
+        return True
+    getcap = shutil.which("getcap") or "/usr/sbin/getcap"
+    try:
+        out = subprocess.run([getcap, str(caddy)], capture_output=True, text=True).stdout
+    except OSError:
+        return False
+    return "cap_net_bind_service" in out
+
+
+def write_caddyfile(domain: str) -> Path:
+    path = DATA / "Caddyfile"
+    path.write_text(
+        "# Written by run.py --domain. Caddy gets and renews the SSL certificate by itself.\n"
+        "{\n\tadmin off\n}\n\n"
+        "%s {\n"
+        "\tencode gzip\n"
+        "\treverse_proxy 127.0.0.1:%d\n"
+        "\theader Strict-Transport-Security \"max-age=31536000\"\n"
+        "}\n" % (domain, BACKEND_PORT), encoding="utf-8")
+    return path
+
+
+def open_web_ports() -> None:
+    """Open 80/443 in ufw when it's active (cloud firewalls / security groups are separate)."""
+    ufw = shutil.which("ufw") or ("/usr/sbin/ufw" if Path("/usr/sbin/ufw").exists() else None)
+    if not ufw or os.geteuid() != 0:
+        return
+    status = subprocess.run([ufw, "status"], capture_output=True, text=True).stdout
+    if "Status: active" in status:
+        for port in ("80/tcp", "443/tcp"):
+            subprocess.run([ufw, "allow", port], capture_output=True)
+        info("Opened ports 80 and 443 in the ufw firewall.")
+
+
 # ----------------------------------------------------------------------------
 # Python 3.10+ for the backend
 # ----------------------------------------------------------------------------
@@ -412,9 +495,9 @@ def ensure_backend_env() -> dict:
 
 
 def write_frontend_env(host: str) -> str:
-    url = "http://%s:%d" % (host, BACKEND_PORT)
+    url = app_url(load_state(), host)
     write_env(FRONTEND / ".env", {"EXPO_PUBLIC_BACKEND_URL": url},
-              "Created by run.py from the server address (python3 run.py --host ... to change it).")
+              "Created by run.py from the server address (--host / --domain to change it).")
     info("The app will talk to the backend at " + url)
     return url
 
@@ -551,10 +634,16 @@ def serve() -> None:
     services.append(("backend", [str(venv_python()), "-m", "uvicorn", "server:app", "--host", "0.0.0.0",
                                  "--port", str(BACKEND_PORT), "--proxy-headers"], BACKEND, backend_env,
                      LOGS / "backend.log"))
+    if state.get("domain") and state.get("caddy"):
+        caddy_env = dict(os.environ)
+        caddy_env.update({"XDG_DATA_HOME": str(DATA / "caddy-data"), "XDG_CONFIG_HOME": str(DATA / "caddy-config"),
+                          "HOME": str(DATA)})
+        services.append(("caddy", [state["caddy"], "run", "--config", str(DATA / "Caddyfile"), "--adapter",
+                                   "caddyfile"], ROOT, caddy_env, LOGS / "caddy.log"))
     if state.get("expo", True):
         expo_env = dict(node_env_)
         expo_env.update({"CI": "1", "REACT_NATIVE_PACKAGER_HOSTNAME": host,
-                         "EXPO_PUBLIC_BACKEND_URL": "http://%s:%d" % (host, BACKEND_PORT)})
+                         "EXPO_PUBLIC_BACKEND_URL": app_url(state, host)})
         services.append(("expo", [shutil.which("npx", path=expo_env["PATH"]), "expo", "start", "--lan",
                                   "--port", str(EXPO_PORT)], FRONTEND, expo_env, LOGS / "expo.log"))
 
@@ -659,8 +748,12 @@ def print_summary() -> None:
     print("\n" + "=" * 70)
     print("  Drywall app: " + ("RUNNING" if running else "STOPPED"))
     print("-" * 70)
-    print("  Web app (office, any browser):  http://%s:%d" % (host, BACKEND_PORT))
-    print("  API explorer:                   http://%s:%d/docs" % (host, BACKEND_PORT))
+    url = app_url(state, host)
+    print("  Web app (office, any browser):  %s" % url)
+    if state.get("domain"):
+        print("  Company website preview:        %s/site/" % url)
+        print("  (still works directly:          http://%s:%d)" % (host, BACKEND_PORT))
+    print("  API explorer:                   %s/docs" % url)
     if state.get("expo", True):
         print("  Phones (Expo Go app):           exp://%s:%d   (or scan the QR code)" % (host, EXPO_PORT))
     print("  Manager login:                  %s / %s" % (env_values.get("ADMIN_EMAIL", "?"),
@@ -676,9 +769,15 @@ def print_summary() -> None:
         if qr.exists() and node:
             subprocess.run([node, "-e", "require(process.argv[1]).generate(process.argv[2],{small:true})",
                             str(qr), "exp://%s:%d" % (host, EXPO_PORT)])
-    print("  Ports %d and %d must be open in the server's firewall / cloud security group." %
-          (BACKEND_PORT, EXPO_PORT))
-    print("  Web clock-in needs HTTPS (browser rule); the Expo Go app works over plain HTTP.\n", flush=True)
+    if state.get("domain"):
+        print("  Ports 80, 443, %d and %d must be open in the server's firewall / cloud security group." %
+              (BACKEND_PORT, EXPO_PORT))
+        print("  The SSL certificate is issued on first start and renewed automatically (see .logs/caddy.log).\n",
+              flush=True)
+    else:
+        print("  Ports %d and %d must be open in the server's firewall / cloud security group." %
+              (BACKEND_PORT, EXPO_PORT))
+        print("  Web clock-in needs HTTPS (browser rule): use --domain for that.\n", flush=True)
 
 
 # ----------------------------------------------------------------------------
@@ -720,6 +819,17 @@ def main() -> None:
             fail("--host needs a value, e.g.  python3 run.py --host app.mycompany.com")
         cli_host = args[i + 1]
 
+    cli_domain = None
+    if "--domain" in args:
+        i = args.index("--domain")
+        if i + 1 >= len(args) or args[i + 1].startswith("--"):
+            fail("--domain needs a value, e.g.  python3 run.py --domain app.vanguarddrywall.ca")
+        cli_domain = args[i + 1].strip().lower().rstrip(".")
+        for prefix in ("https://", "http://"):
+            if cli_domain.startswith(prefix):
+                cli_domain = cli_domain[len(prefix):]
+        cli_domain = cli_domain.split("/")[0]
+
     print("Drywall Company Management App - server setup")
     if os.geteuid() == 0:
         info("Note: running as root works, but a normal user account is recommended.")
@@ -737,8 +847,31 @@ def main() -> None:
     state["expo"] = "--no-expo" not in args
     state["node_bin"] = str(bin_dir)
     state["mongod"] = str(mongod)
+    if cli_domain in ("off", "none"):
+        state.pop("domain", None)
+        info("Domain turned off; the app goes back to http://%s:%d" % (host, BACKEND_PORT))
+    elif cli_domain:
+        step("Setting up %s" % cli_domain)
+        if "--force" not in args:
+            check_domain_dns(cli_domain)
+        state["domain"] = cli_domain
+    if state.get("domain"):
+        caddy = ensure_caddy()
+        if not caddy_can_bind(caddy):
+            fail("Caddy needs permission to use ports 80 and 443. Run this once, then run this script again:\n"
+                 "        sudo setcap cap_net_bind_service=+ep %s" % caddy)
+        for port in (80, 443):
+            if port_open(port) and not supervisor_pid():
+                fail("Port %d is already used by another program (often apache2 or nginx).\n"
+                     "        See which:  sudo ss -ltnp 'sport = :%d'   then stop it, e.g.  sudo systemctl disable --now apache2"
+                     % (port, port))
+        write_caddyfile(state["domain"])
+        open_web_ports()
+        state["caddy"] = str(caddy)
     save_state(state)
     info("Address for phones and browsers: %s  (change with --host)" % host)
+    if state.get("domain"):
+        info("The app's web address: https://%s" % state["domain"])
     backend_url = write_frontend_env(host)
     ensure_backend_deps(base_python)
     ensure_frontend_deps(env)
