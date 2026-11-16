@@ -8,6 +8,7 @@ One-command launcher for the Drywall Company Management App, for an Ubuntu 20.04
     python3 run.py status     is it running? shows the addresses again
     python3 run.py stop       stop everything (and don't start on reboot)
     python3 run.py logs       follow the logs (Ctrl+C to stop watching)
+    python3 run.py update     get the latest version from GitHub and restart
 
 Options for the first command:
     --host <name-or-IP>   address phones and browsers use to reach this server
@@ -19,7 +20,7 @@ Ubuntu 20.04's own Python is 3.8, which is fine for running this script. What th
 app needs is downloaded into this folder on the first run (nothing system-wide):
 
   * Python 3.12   -> .tools/python    (for the backend; skipped if 3.10+ is installed)
-  * Node.js 22    -> .tools/node      (skipped if Node 20+ is installed)
+  * Node.js 22    -> .tools/node      (skipped if Node 22.13+ / 24.3+ is installed)
   * MongoDB       -> .tools/mongodb   (7.0, or 4.4 on CPUs without AVX)
   * packages      -> backend/.venv and frontend/node_modules
 
@@ -51,8 +52,7 @@ from pathlib import Path
 # Settings
 # ----------------------------------------------------------------------------
 PYTHON_BUILD = ("20241016", "3.12.7")   # python-build-standalone release, CPython version
-NODE_VERSION = "22.12.0"
-NODE_MIN_MAJOR = 20
+NODE_VERSION = "22.14.0"   # Expo SDK 58 needs Node 22.13+ (or 24.3+, or 26+); odd versions unsupported
 MONGO_VERSION = "7.0.14"
 MONGO_VERSION_NO_AVX = "4.4.29"         # last MongoDB that runs on CPUs without AVX
 MONGO_PORT = 27017
@@ -271,23 +271,29 @@ def ensure_python() -> str:
 # ----------------------------------------------------------------------------
 # Node.js
 # ----------------------------------------------------------------------------
-def node_major(node: str) -> int:
+def node_version(node: str) -> tuple:
     try:
         out = subprocess.run([node, "--version"], capture_output=True, text=True, timeout=20).stdout
-        return int(out.strip().lstrip("v").split(".")[0])
+        return tuple(int(x) for x in out.strip().lstrip("v").split(".")[:2])
     except Exception:  # noqa: BLE001
-        return 0
+        return (0, 0)
+
+
+def node_ok(node: str) -> bool:
+    """Node versions Expo SDK 58 supports: 22.13+, 24.3+, or 26 and later."""
+    v = node_version(node)
+    return (v[0] == 22 and v >= (22, 13)) or (v[0] == 24 and v >= (24, 3)) or v[0] >= 26
 
 
 def bundled_node():
-    hits = sorted((TOOLS / "node").glob("node-v*/bin/node"))
-    return hits[-1] if hits else None
+    hits = [p for p in (TOOLS / "node").glob("node-v*/bin/node") if node_ok(str(p))]
+    return sorted(hits)[-1] if hits else None
 
 
 def node_bin_dir() -> Path:
     """Folder with node/npm/npx. Downloads Node if needed. Doesn't print."""
     system = shutil.which("node")
-    if system and node_major(system) >= NODE_MIN_MAJOR and shutil.which("npm"):
+    if system and node_ok(system) and shutil.which("npm"):
         return Path(system).parent
     found = bundled_node()
     if found:
@@ -439,19 +445,43 @@ def ensure_backend_deps(base_python: str) -> None:
     info("Backend packages installed.")
 
 
+def _major(version_spec: str) -> str:
+    digits = "".join(c if c.isdigit() or c == "." else " " for c in version_spec or "").split()
+    return digits[0].split(".")[0] if digits else ""
+
+
 def ensure_frontend_deps(env: dict) -> None:
-    step("Installing app packages (first run takes a few minutes)")
+    """Install the app's packages, then let Expo line every Expo-managed package up with the
+    Expo SDK in package.json (`expo install --fix`)."""
+    step("Installing app packages (first run or SDK upgrade takes several minutes)")
+    pkg = FRONTEND / "package.json"
     stamp = FRONTEND / "node_modules" / ".install-hash"
-    want = file_hash(FRONTEND / "package.json", FRONTEND / "package-lock.json")
-    if stamp.exists() and stamp.read_text() == want:
+    if stamp.exists() and stamp.read_text() == file_hash(pkg):
         info("App packages are up to date.")
         return
+    # A new Expo SDK: start from a clean slate so no old native package versions linger.
+    wanted = _major(json.loads(pkg.read_text())["dependencies"].get("expo", ""))
+    installed_pkg = FRONTEND / "node_modules" / "expo" / "package.json"
+    installed = _major(json.loads(installed_pkg.read_text()).get("version", "")) if installed_pkg.exists() else ""
+    if installed and wanted and installed != wanted:
+        info("Upgrading the app from Expo SDK %s to SDK %s (clean install)." % (installed, wanted))
+        for d in ("node_modules", ".expo", ".metro-cache", "dist"):
+            shutil.rmtree(str(FRONTEND / d), ignore_errors=True)
+        lock = FRONTEND / "package-lock.json"
+        if lock.exists():
+            lock.unlink()
     npm = shutil.which("npm", path=env["PATH"])
-    if subprocess.run([npm, "ci", "--loglevel=error"], cwd=str(FRONTEND), env=env).returncode != 0:
-        info("Clean install failed; retrying with a more forgiving install...")
+    if subprocess.run([npm, "install", "--loglevel=error"], cwd=str(FRONTEND), env=env).returncode != 0:
+        info("Install hit a version conflict; retrying with a more forgiving install...")
         run([npm, "install", "--legacy-peer-deps", "--loglevel=error"], FRONTEND, env, what="Installing app packages")
+    info("Lining packages up with the Expo SDK (expo install --fix)...")
+    fix_env = dict(env)
+    fix_env["CI"] = "1"
+    npx = shutil.which("npx", path=env["PATH"])
+    if subprocess.run([npx, "expo", "install", "--fix"], cwd=str(FRONTEND), env=fix_env).returncode != 0:
+        info("Note: 'expo install --fix' reported a problem (see above). Continuing.")
     stamp.parent.mkdir(exist_ok=True)
-    stamp.write_text(want)
+    stamp.write_text(file_hash(pkg))   # after --fix, so an unchanged package.json skips this next time
     info("App packages installed.")
 
 
@@ -459,7 +489,8 @@ def build_web(env: dict, backend_url: str) -> None:
     step("Building the web version of the app")
     dist = FRONTEND / "dist"
     stamp = DATA / "web-build-hash"
-    sources = [FRONTEND / "package-lock.json", FRONTEND / "app.json", backend_url]
+    sources = [FRONTEND / "package.json", FRONTEND / "package-lock.json", FRONTEND / "app.json",
+               FRONTEND / "metro.config.js", backend_url]
     for folder in ("app", "src", "assets"):
         sources += sorted(p for p in (FRONTEND / folder).rglob("*") if p.is_file())
     want = file_hash(*sources)
@@ -659,6 +690,14 @@ def main() -> None:
         fail("This launcher needs Python 3.8 or newer.")
     if "--serve" in args:
         return serve()
+    if args[:1] == ["update"]:
+        step("Getting the latest version from GitHub")
+        # Undo the launcher's own package version fixes so git can pull cleanly.
+        subprocess.run(["git", "checkout", "--", "frontend/package.json"], cwd=str(ROOT))
+        run(["git", "pull", "--ff-only"], ROOT, what="git pull (if it says your changes would be overwritten, "
+                                                      "run: git stash  then this command again)")
+        # Start the freshly pulled launcher with the same options.
+        os.execv(sys.executable, [sys.executable, str(ROOT / "run.py")] + args[1:])
     if args[:1] == ["stop"]:
         stopped = stop()
         set_autostart(False)

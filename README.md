@@ -17,7 +17,7 @@ python3 run.py
 
 No sudo and no prompts. Ubuntu 20.04's built-in Python 3.8 is enough to run the
 launcher. The first run downloads what the app needs into this folder (Python 3.12,
-Node.js 22, MongoDB) and takes about 10 minutes. After that it:
+Node.js 22.14, MongoDB) and takes about 10 minutes. After that it:
 
 - starts the database, backend and app **in the background** (closing your SSH session is fine),
 - **restarts** any part that crashes,
@@ -29,11 +29,13 @@ Node.js 22, MongoDB) and takes about 10 minutes. After that it:
 | `python3 run.py` | Set up / update and (re)start everything |
 | `python3 run.py status` | Show whether it's running, plus the addresses and login |
 | `python3 run.py logs` | Watch the logs live (Ctrl+C to stop watching) |
+| `python3 run.py update` | Get the latest version from GitHub and restart (use this for every update) |
 | `python3 run.py stop` | Stop everything and turn off start-on-reboot |
 | `python3 run.py --host app.example.com` | Use a domain name (or a specific IP) instead of the detected public IP |
 | `python3 run.py --no-expo` | Run only the web app + API (no phone dev server) |
 
-After `git pull`, run `python3 run.py` again: it reinstalls only what changed and rebuilds the web app.
+To update, run `python3 run.py update`: it pulls the latest code, reinstalls only what changed and
+rebuilds the web app.
 
 ### How people reach it
 
@@ -51,8 +53,8 @@ that means the provider's firewall / security group. If `ufw` is active on the s
 
 - **Web clock-in needs HTTPS.** Browsers only give GPS to secure sites, so clocking in through the
   web app needs a domain name with HTTPS (planned). Clocking in through the phone app works now.
-- **Expo Go is for testing.** For the crew's phones long-term we'll build a proper installable app.
-  If Expo Go says the project's SDK is unsupported, the app needs an SDK upgrade (next on the list).
+- **Expo Go is for testing.** The app is on **Expo SDK 58**, the version the current Expo Go in the
+  App Store / Play Store opens. For the crew's phones long-term we'll build a proper installable app.
 - **RAM:** building the web app needs about 2 GB. On a 1 GB server, add swap first.
 - **MongoDB** listens only on the server itself (127.0.0.1), never on the internet. Data lives in
   `.data/db`. On CPUs without AVX the launcher automatically uses MongoDB 4.4.

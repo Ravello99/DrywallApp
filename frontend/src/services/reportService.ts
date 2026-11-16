@@ -1,6 +1,4 @@
 import api from './api';
-import * as FileSystem from 'expo-file-system';
-import * as Sharing from 'expo-sharing';
 
 export const reportService = {
   async getDashboardStats() {

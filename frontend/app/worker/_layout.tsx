@@ -64,7 +64,20 @@ export default function WorkerLayout() {
 
   return (
     <Tabs
-      tabBar={(props: any) => <BrandTabBar {...props} visible={['index', 'clock', 'calendar', 'tasks', ...(isForeman ? ['requests'] : []), 'more']} />}
+      tabBar={() => (
+        <BrandTabBar
+          base="/worker"
+          aliases={{}}
+          tabs={[
+            { name: 'index', label: 'Home', icon: 'home' },
+            { name: 'clock', label: 'Clock', icon: 'access-time' },
+            { name: 'calendar', label: 'Calendar', icon: 'event' },
+            { name: 'tasks', label: 'Tasks', icon: 'checklist' },
+            ...(isForeman ? [{ name: 'requests', label: 'Requests', icon: 'local-shipping' }] : []),
+            { name: 'more', label: 'More', icon: 'menu' },
+          ]}
+        />
+      )}
       screenOptions={{
         tabBarActiveTintColor: COLORS.primary,
         tabBarInactiveTintColor: COLORS.gray400,

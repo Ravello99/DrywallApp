@@ -39,3 +39,6 @@ web-build/
 *.p12
 *.jks
 *.mobileprovision
+
+# npm lock is generated on the server for the installed Expo SDK
+frontend/package-lock.json

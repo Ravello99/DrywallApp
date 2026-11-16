@@ -7,7 +7,6 @@
     "icon": "./assets/images/icon.png",
     "scheme": "vanguard",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.vanguarddrywall.app",
@@ -46,12 +45,6 @@
         }
       ],
       [
-        "expo-camera",
-        {
-          "cameraPermission": "Allow VanGuard to use your camera for safety documents and site photos."
-        }
-      ],
-      [
         "expo-image-picker",
         {
           "photosPermission": "Allow VanGuard to access your photos for safety documents and site photos."
@@ -66,7 +59,6 @@
           "backgroundColor": "#FFFFFF"
         }
       ],
-      "@react-native-community/datetimepicker",
       "expo-font",
       "expo-web-browser"
     ],

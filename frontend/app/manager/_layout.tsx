@@ -70,7 +70,20 @@ export default function ManagerLayout() {
 
   return (
     <Tabs
-      tabBar={(props: any) => <BrandTabBar {...props} visible={['index', 'projects', ...(canBid ? ['bids'] : []), ...(canApprove ? ['approvals'] : []), 'members', 'more']} />}
+      tabBar={() => (
+        <BrandTabBar
+          base="/manager"
+          aliases={{ project: 'projects' }}
+          tabs={[
+            { name: 'index', label: 'Dashboard', icon: 'dashboard' },
+            { name: 'projects', label: 'Projects', icon: 'apartment' },
+            ...(canBid ? [{ name: 'bids', label: 'Bids', icon: 'request-quote' }] : []),
+            ...(canApprove ? [{ name: 'approvals', label: 'Approvals', icon: 'pending-actions' }] : []),
+            { name: 'members', label: 'Team', icon: 'people' },
+            { name: 'more', label: 'More', icon: 'menu' },
+          ]}
+        />
+      )}
       screenOptions={{
         tabBarActiveTintColor: COLORS.primary,
         tabBarInactiveTintColor: COLORS.gray400,
