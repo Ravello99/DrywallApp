@@ -80,6 +80,8 @@ export const drawApi = {
   submit: (id: string) => post(`/invoices/${id}/submit`),
   pay: (id: string, data: any) => post(`/invoices/${id}/payments`, data),
   remove: (id: string) => del(`/invoices/${id}`),
+  defaults: (siteId: string) => get('/invoices/defaults', { site_id: siteId }),
+  link: (id: string) => post(`/invoices/${id}/link`),
 };
 
 export const bidApi = {

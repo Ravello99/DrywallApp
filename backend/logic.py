@@ -192,6 +192,12 @@ def draw_amounts(gross_cents: int, holdback_pct: float, tax_pct: float) -> dict:
     return {"gross": gross_cents, "holdback": holdback, "net": net, "tax": tax, "total_due": net + tax}
 
 
+def money_text(cents) -> str:
+    """12345 -> '$123.45' (for history notes and messages)."""
+    cents = int(cents or 0)
+    return "%s$%s" % ("-" if cents < 0 else "", "{:,.2f}".format(abs(cents) / 100.0))
+
+
 def invoice_balance(invoice: dict) -> int:
     paid = sum(int(p.get("amount", 0)) for p in invoice.get("payments", []))
     return int(invoice.get("total_due", 0)) - paid

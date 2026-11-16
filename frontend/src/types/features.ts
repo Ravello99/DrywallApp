@@ -260,6 +260,11 @@ export interface Draw {
   paid_total: number;
   payments: { amount: number; paid_on: string; reference?: string | null }[];
   days_outstanding?: number | null;
+  mode?: 'percent' | 'amount';
+  bill_to?: string | null;
+  invoice_date?: string | null;
+  due_date?: string | null;
+  history?: { at: string; by: string; text: string }[];
 }
 
 export type BidStatus = 'invited' | 'reviewing' | 'submitted' | 'won' | 'lost' | 'declined';

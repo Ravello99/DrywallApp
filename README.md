@@ -115,6 +115,23 @@ password IMAP; forward bid invites to a Gmail address, or use **Paste invite ema
 The inbox is checked every 10 minutes (`BID_INBOX_POLL_MINUTES`), messages stay unread, and each
 email is imported only once.
 
+### Invoices (progress draws)
+
+Each progress draw is an invoice. While it's a draft you can edit it and **Preview invoice**;
+**Send invoice** dates it, sets the due date and freezes it (bill-to, contract summary, amounts).
+**View invoice** opens a printable page: use **Print or save as PDF** and email the PDF to the GC.
+Every draw keeps a history (created, edited, sent, each payment). Company details on the invoice
+come from `backend/.env` (restart with `python3 run.py` after changing them):
+
+```
+COMPANY_NAME=VanGuard Drywall & Acoustics
+COMPANY_ADDRESS=3 - 55 Oakdale Ave\nSt. Catharines, ON
+COMPANY_PHONE=289-866-7222
+COMPANY_EMAIL=accounting@yourcompany.ca
+COMPANY_GST_NUMBER=123456789 RT0001
+PAYMENT_TERMS_DAYS=30
+```
+
 ## Tests
 
 ```bash

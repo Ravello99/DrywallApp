@@ -2,12 +2,16 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, Alert } from 'react-native';
 import { Draw } from '../../types/features';
 import { drawApi, apiError } from '../../services/pmService';
+import { openServerDocument } from '../../utils/openDocument';
 import { COLORS } from '../../constants/colors';
 import { Card, SectionTitle, Pill, Sheet, Field, Chips, Empty, Loading, Row, Button, Stat, StatRow, money, shortDate, todayISO, ui } from '../ui';
 
 export default function DrawsTab({ siteId, canBill, onChanged }: { siteId: string; canBill: boolean; onChanged: () => void }) {
   const [draws, setDraws] = useState<Draw[] | null>(null);
   const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState<Draw | null>(null);
+  const [billTo, setBillTo] = useState('');
+  const [openHistory, setOpenHistory] = useState<string | null>(null);
   const [paying, setPaying] = useState<Draw | null>(null);
   const [saving, setSaving] = useState(false);
   const [mode, setMode] = useState('percent');
@@ -34,6 +38,39 @@ export default function DrawsTab({ siteId, canBill, onChanged }: { siteId: strin
     load();
   }, [load]);
 
+  const openNew = async () => {
+    setEditing(null);
+    setMode('percent');
+    setPercent('');
+    setAmount('');
+    setDesc('');
+    setPeriodEnd(todayISO());
+    setCreating(true);
+    try {
+      const d = await drawApi.defaults(siteId);
+      setBillTo(d.bill_to || '');
+      setHoldback(String(d.holdback_pct));
+      setTax(String(d.tax_pct));
+    } catch {
+      /* keep the form's own defaults */
+    }
+  };
+
+  const openEdit = (d: Draw) => {
+    setEditing(d);
+    setMode(d.mode || 'percent');
+    setPercent(d.percent_complete != null ? String(d.percent_complete) : '');
+    setAmount(String(d.gross));
+    setHoldback(String(d.holdback_pct));
+    setTax(String(d.tax_pct));
+    setPeriodEnd(d.period_end || '');
+    setDesc(d.description || '');
+    setBillTo(d.bill_to || '');
+    setCreating(true);
+  };
+
+  const viewInvoice = (d: Draw) => openServerDocument(() => drawApi.link(d.id));
+
   const create = async () => {
     const data: any = {
       site_id: siteId,
@@ -42,6 +79,7 @@ export default function DrawsTab({ siteId, canBill, onChanged }: { siteId: strin
       tax_pct: parseFloat(tax) || 0,
       period_end: periodEnd || null,
       description: desc || null,
+      bill_to: billTo.trim() || null,
     };
     if (mode === 'percent') data.percent_complete = parseFloat(percent);
     else data.amount = parseFloat(amount.replace(/[$,]/g, ''));
@@ -51,8 +89,10 @@ export default function DrawsTab({ siteId, canBill, onChanged }: { siteId: strin
     }
     setSaving(true);
     try {
-      await drawApi.create(data);
+      if (editing) await drawApi.update(editing.id, data);
+      else await drawApi.create(data);
       setCreating(false);
+      setEditing(null);
       setPercent('');
       setAmount('');
       setDesc('');
@@ -66,10 +106,10 @@ export default function DrawsTab({ siteId, canBill, onChanged }: { siteId: strin
   };
 
   const submit = (d: Draw) =>
-    Alert.alert('Submit draw', `Mark ${d.invoice_number} (${money(d.total_due, 2)}) as sent to the GC?`, [
+    Alert.alert('Send invoice', `Send ${d.invoice_number} (${money(d.total_due, 2)}) to ${(d.bill_to || 'the GC').split('\n')[0]}? It's dated today and can't be changed after this. Open the invoice afterwards to print it or save it as a PDF.`, [
       { text: 'Cancel', style: 'cancel' },
       {
-        text: 'Submit',
+        text: 'Send',
         onPress: async () => {
           try {
             await drawApi.submit(d.id);
@@ -139,7 +179,7 @@ export default function DrawsTab({ siteId, canBill, onChanged }: { siteId: strin
         <Stat label="Outstanding" value={money(outstanding)} color={outstanding > 0 ? COLORS.warning : undefined} />
         <Stat label="Holdback held" value={money(holdbackHeld)} />
       </StatRow>
-      <SectionTitle title="Progress draws" action={canBill ? 'New draw' : undefined} onAction={() => setCreating(true)} />
+      <SectionTitle title="Progress draws" action={canBill ? 'New draw' : undefined} onAction={openNew} />
       {draws.length === 0 ? (
         <Empty icon="receipt-long" text="No draws yet" sub={canBill ? 'Set the contract value on the Overview tab, then bill by % complete.' : undefined} />
       ) : (
@@ -164,29 +204,46 @@ export default function DrawsTab({ siteId, canBill, onChanged }: { siteId: strin
                 .filter(Boolean)
                 .join(' · ')}
             </Text>
+            {d.bill_to ? <Text style={ui.muted}>Bill to: {d.bill_to.split('\n')[0]}</Text> : null}
+            {d.invoice_date ? (
+              <Text style={ui.muted}>
+                Invoice dated {shortDate(d.invoice_date)}
+                {d.due_date ? `, due ${shortDate(d.due_date)}` : ''}
+              </Text>
+            ) : null}
             {d.payments.map((p, i) => (
               <Text key={i} style={[ui.muted, { color: COLORS.success }]}>
                 Paid {money(p.amount, 2)} on {shortDate(p.paid_on)}
                 {p.reference ? ` (${p.reference})` : ''}
               </Text>
             ))}
-            {canBill ? (
-              <Row style={{ marginTop: 10 }}>
-                {d.status === 'draft' ? (
-                  <>
-                    <Button title="Submit to GC" small onPress={() => submit(d)} />
-                    <Button title="Delete" kind="ghost" small onPress={() => removeDraft(d)} />
-                  </>
-                ) : d.balance > 0 ? (
-                  <Button title="Record payment" kind="success" small icon="payments" onPress={() => openPay(d)} />
-                ) : null}
-              </Row>
-            ) : null}
+            {openHistory === d.id
+              ? (d.history || []).map((h, i) => (
+                  <Text key={i} style={ui.muted}>
+                    {shortDate(h.at)}: {h.text} ({h.by})
+                  </Text>
+                ))
+              : null}
+            <Row style={{ marginTop: 10, flexWrap: 'wrap' }}>
+              <Button title={d.status === 'draft' ? 'Preview invoice' : 'View invoice'} small kind="ghost" icon="description" onPress={() => viewInvoice(d)} />
+              {(d.history || []).length ? (
+                <Button title={openHistory === d.id ? 'Hide history' : 'History'} small kind="ghost" onPress={() => setOpenHistory(openHistory === d.id ? null : d.id)} />
+              ) : null}
+              {canBill && d.status === 'draft' ? (
+                <>
+                  <Button title="Send invoice" small onPress={() => submit(d)} />
+                  <Button title="Edit" kind="ghost" small onPress={() => openEdit(d)} />
+                  <Button title="Delete" kind="ghost" small onPress={() => removeDraft(d)} />
+                </>
+              ) : canBill && d.balance > 0 ? (
+                <Button title="Record payment" kind="success" small icon="payments" onPress={() => openPay(d)} />
+              ) : null}
+            </Row>
           </Card>
         ))
       )}
 
-      <Sheet visible={creating} title="New progress draw" onClose={() => setCreating(false)} onSubmit={create} submitLabel="Create draft" loading={saving}>
+      <Sheet visible={creating} title={editing ? `Edit ${editing.invoice_number}` : 'New progress draw'} onClose={() => { setCreating(false); setEditing(null); }} onSubmit={create} submitLabel={editing ? 'Save draft' : 'Create draft'} loading={saving}>
         <Chips options={[{ value: 'percent', label: 'By % complete' }, { value: 'amount', label: 'By amount' }]} value={mode} onChange={setMode} />
         {mode === 'percent' ? (
           <Field label="Total % complete to date" value={percent} onChangeText={setPercent} keyboardType="decimal-pad" placeholder="e.g. 45 (earlier draws are subtracted)" />
@@ -202,7 +259,8 @@ export default function DrawsTab({ siteId, canBill, onChanged }: { siteId: strin
           </View>
         </Row>
         <Field label="Period ending (YYYY-MM-DD)" value={periodEnd} onChangeText={setPeriodEnd} />
-        <Field label="Description (optional)" value={desc} onChangeText={setDesc} />
+        <Field label="Description (optional)" value={desc} onChangeText={setDesc} placeholder="Shown on the invoice" />
+        <Field label="Bill to (GC name and billing address)" value={billTo} onChangeText={setBillTo} multiline placeholder={'Northline Builders Inc.\nAttn: Accounts Payable\n200 King St W, Toronto ON'} />
       </Sheet>
 
       <Sheet visible={!!paying} title={`Payment for ${paying?.invoice_number || ''}`} onClose={() => setPaying(null)} onSubmit={pay} submitLabel="Record payment" submitKind="success" loading={saving}>

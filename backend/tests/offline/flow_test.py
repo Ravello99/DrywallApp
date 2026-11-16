@@ -143,17 +143,38 @@ async def main():
     co = await CO.respond(co["id"], CO.ChangeOrderDecision(decision="approved", approved_amount=20000), pm)
     check(co["approved_amount"] == 20000.0 and co["number"] == 1, "CO #1 approved at $20,000")
     await expect_error(CO.update(co["id"], CO.ChangeOrderUpdate(amount=1), pm), 400, "approved CO can't be edited")
-    draw = await I.create_draw(I.DrawIn(site_id=sid, mode="percent", percent_complete=40), coord)
+    nobill = await I.create_draw(I.DrawIn(site_id=sid, mode="percent", percent_complete=40), coord)
+    await expect_error(I.submit(nobill["id"], coord), 400, "can't send an invoice with no bill-to")
+    await I.delete_draft(nobill["id"], coord)
+    draw = await I.create_draw(I.DrawIn(site_id=sid, mode="percent", percent_complete=40,
+                                        bill_to="Northline Builders Inc.\n200 King St W, Toronto ON"), coord)
+    check(draw["invoice_number"] == "24-017-D01", "invoice numbered from the project number (%s)" % draw["invoice_number"])
+    check(draw["snapshot"]["contract"]["revised"] == 520000.0 and draw["snapshot"]["contract"]["remaining_after"] == 312000.0,
+          "invoice record has contract summary (revised $520k, $312k left)")
+    dfl = await I.draw_defaults(site_id=sid, current_user=coord)
+    check(dfl["bill_to"].startswith("Northline"), "bill-to remembered for the next draw")
     check(draw["gross"] == 208000.0, "40%% of $520,000 revised contract = $208,000 (%s)" % draw["gross"])
     check(draw["holdback"] == 20800.0 and draw["tax"] == 9360.0 and draw["total_due"] == 196560.0,
           "holdback 10%, GST 5% on net, total $196,560")
     await expect_error(I.add_payment(draw["id"], I.PaymentIn(amount=10), coord), 400, "can't pay a draft")
-    await I.submit(draw["id"], coord)
+    sent = await I.submit(draw["id"], coord)
+    check(sent["invoice_date"] and sent["due_date"] and sent["status"] == "submitted", "sent invoice gets invoice and due dates")
+    link = await I.document_link(draw["id"], coord)
+    tok = link["url"].split("token=")[1]
+    page = await I.document(draw["id"], token=tok)
+    check("Invoice 24-017-D01" in page.body and "Northline Builders Inc." in page.body and "$196,560.00" in page.body
+          and "DRAFT" not in page.body, "printable invoice shows number, bill-to and total")
+    await expect_error(I.document(draw["id"], token="garbage"), 401, "invoice page needs a valid link")
+    await expect_error(I.document(str(core.oid(sid)), token=tok), 401, "link only opens its own invoice")
     await expect_error(I.create_draw(I.DrawIn(site_id=sid, mode="percent", percent_complete=30), coord), 400,
                        "can't bill a % that's already billed")
     paid = await I.add_payment(draw["id"], I.PaymentIn(amount=100000, reference="CHQ 1001"), coord)
     check(paid["status"] == "partially_paid" and paid["balance"] == 96560.0, "partial payment -> balance $96,560")
     await expect_error(I.add_payment(draw["id"], I.PaymentIn(amount=999999), coord), 400, "overpayment blocked")
+    rec = (await I.list_draws(site_id=sid, status=None, current_user=coord))[0]
+    check([h["text"].split(" ")[0] for h in rec["history"]] == ["Draft", "Sent", "Payment"], "history records created/sent/paid")
+    page = await I.document(draw["id"], token=tok)
+    check("Balance owing" in page.body and "CHQ 1001" in page.body, "invoice shows the payment and balance")
     summ = await I.summary(coord)
     check(summ["outstanding"] == 96560.0 and summ["aging"]["0-30"] == 96560.0, "A/R summary + aging")
     fin = await P.financials(await db.sites.find_one({"_id": core.oid(sid)}))

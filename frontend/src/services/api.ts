@@ -21,7 +21,7 @@ function resolveApiUrl(): string {
   return CONFIGURED_URL;
 }
 
-const API_URL = resolveApiUrl();
+export const API_URL = resolveApiUrl();
 
 const api = axios.create({
   baseURL: `${API_URL}/api`,
