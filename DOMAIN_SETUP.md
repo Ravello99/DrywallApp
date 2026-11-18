@@ -128,3 +128,20 @@ The old address `http://<server IP>:8000` keeps working, so nobody is locked out
 To host the website at `vanguarddrywall.ca` on cPanel:
 1. Open **File Manager** and go to `public_html`.
 2. Upload `index.html` and the `assets` folder from the repo's `website` folder.
+
+---
+
+## Another app on the same server (e.g. Vanguard Takeoff)
+
+Caddy on ports 80/443 can serve more than one domain. Other apps put their
+site blocks in **`.data/extra-sites.caddy`** (Vanguard Takeoff's
+`python3 takeoff.py domain takeoff.vanguarddrywall.ca` writes it for you).
+`run.py` adds that file to its Caddy config each time it starts, so after
+changing it run:
+
+```bash
+python3 run.py update
+```
+
+If the extra file is ever invalid, it is left out (with a message) and
+`app.vanguarddrywall.ca` keeps working.

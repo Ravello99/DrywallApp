@@ -328,16 +328,40 @@ def caddy_can_bind(caddy: Path) -> bool:
     return "cap_net_bind_service" in out
 
 
-def write_caddyfile(domain: str) -> Path:
+EXTRA_SITES = DATA / "extra-sites.caddy"
+
+
+def write_caddyfile(domain: str, caddy: Path | None = None) -> Path:
+    """Caddy config for the app's domain, plus any other sites on this server.
+
+    Other apps on the same server (e.g. Vanguard Takeoff at takeoff.<domain>)
+    put their own site blocks in .data/extra-sites.caddy; they are appended
+    here so the one Caddy on ports 80/443 serves them all. If that file makes
+    the config invalid, it is left out and the app's own site keeps working.
+    """
     path = DATA / "Caddyfile"
-    path.write_text(
+    base = (
         "# Written by run.py --domain. Caddy gets and renews the SSL certificate by itself.\n"
         "{\n\tadmin off\n}\n\n"
         "%s {\n"
         "\tencode gzip\n"
         "\treverse_proxy 127.0.0.1:%d\n"
         "\theader Strict-Transport-Security \"max-age=31536000\"\n"
-        "}\n" % (domain, BACKEND_PORT), encoding="utf-8")
+        "}\n" % (domain, BACKEND_PORT))
+    extra = EXTRA_SITES.read_text(encoding="utf-8") if EXTRA_SITES.exists() else ""
+    if not extra.strip():
+        path.write_text(base, encoding="utf-8")
+        return path
+    path.write_text(base + "\n# Other sites on this server (from .data/extra-sites.caddy)\n" + extra, encoding="utf-8")
+    if caddy:
+        check = subprocess.run([str(caddy), "validate", "--config", str(path), "--adapter", "caddyfile"],
+                               capture_output=True, text=True, timeout=60)
+        if check.returncode != 0:
+            path.write_text(base, encoding="utf-8")
+            info("Left out .data/extra-sites.caddy: Caddy says it isn't valid. %s"
+                 % (check.stderr.strip().splitlines() or [""])[-1])
+            return path
+    info("Also serving the other sites listed in .data/extra-sites.caddy.")
     return path
 
 
@@ -891,7 +915,7 @@ def main() -> None:
                 fail("Port %d is already used by another program (often apache2 or nginx).\n"
                      "        See which:  sudo ss -ltnp 'sport = :%d'   then stop it, e.g.  sudo systemctl disable --now apache2"
                      % (port, port))
-        write_caddyfile(state["domain"])
+        write_caddyfile(state["domain"], caddy)
         open_web_ports()
         state["caddy"] = str(caddy)
     save_state(state)
